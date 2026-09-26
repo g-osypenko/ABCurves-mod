@@ -7,7 +7,7 @@ and keeps all mutable state in a caller-owned `abc_online_renderer_t`.
 ## Build and test
 
 ```sh
-cmake -S runtime/c -B runtime/c/build
+cmake -S runtime/c -B runtime/c/build -DCMAKE_BUILD_TYPE=Release
 cmake --build runtime/c/build --config Release
 ctest --test-dir runtime/c/build -C Release --output-on-failure
 ```
@@ -72,6 +72,10 @@ The caller is responsible for synchronization and object lifetimes. Prepare a
 replacement off-path and select it only between events if the physical setup changes
 materially. There is no timer-driven refresh or continuously rolling observer in
 this contract.
+
+Each output axis is bounded to `[-32767, 32767]`, and the caller must respect the
+report range of its transport. If residual debt exceeds the signed Q16 range, the
+runtime returns `ABC_FIXED_ERR_RANGE`.
 
 Frozen training and detection experiments may deliberately prepare an exact
 per-event window ending at B. That remains valid, but it is an experimental input

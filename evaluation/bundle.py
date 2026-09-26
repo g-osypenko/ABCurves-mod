@@ -11,8 +11,8 @@ import numpy as np
 
 SCHEMA = "abcurves.descriptor_bundle.v1"
 IDENTITY_NOTE = (
-    "installation_key is a persistent collection key used for leakage control; "
-    "it is not a verified biological identity"
+    "installation_key identifies a participant and groups their sessions "
+    "for leakage control"
 )
 
 

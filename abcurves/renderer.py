@@ -112,7 +112,7 @@ class RendererConfig:
     teacher_base_hysteresis: float = 1.0
     base_hysteresis: float = 0.5  # deadband against accumulator sign crossings
     force_release: float = 32.0  # |accumulator| safety release (drift guard)
-    max_abs_count: int = 127
+    max_abs_count: int = 32767
     prefix_smoothing_spec: str | None = None
     zero_intent_gate: bool = True
     zero_intent_threshold: float = 1e-7
@@ -981,6 +981,7 @@ def sample_count_streams(
     mask: np.ndarray,
     *,
     spec_key: str,
+    prefix_smoothing_spec: str | None = None,
     seed: int = 7,
     device: str | torch.device = "cpu",
     offset_temperature: float | None = None,
@@ -1001,6 +1002,7 @@ def sample_count_streams(
     the raw future is never read. AF1.5 is the release law and therefore the
     default. ``offset_*_temperature_map`` are optional per-tick ``(N, H)`` maps
     (used by controlled sampling studies); scalar temperatures otherwise.
+    ``prefix_smoothing_spec`` overrides the checkpoint's prefix view when supplied.
     """
 
     cfg = model.config
@@ -1049,7 +1051,9 @@ def sample_count_streams(
     smooth_all = np.zeros((n_ex, horizon, 2), dtype=np.float32)
     prefix_states: list[dict[str, Any]] = []
 
-    prefix_spec = parse_smoothing_spec(cfg.prefix_smoothing_spec or spec_key)
+    prefix_spec = parse_smoothing_spec(
+        prefix_smoothing_spec or cfg.prefix_smoothing_spec or spec_key
+    )
     for i in range(n_ex):
         d = durations[i]
         if d < 1:
@@ -1420,6 +1424,7 @@ class FloatRendererModel:
             )
         with self._render_lock, torch.random.fork_rng(devices=cuda_devices):
             deterministic_before = torch.are_deterministic_algorithms_enabled()
+            warn_only_before = torch.is_deterministic_algorithms_warn_only_enabled()
             torch.use_deterministic_algorithms(True)
             try:
                 sampled = sample_count_streams(
@@ -1428,13 +1433,16 @@ class FloatRendererModel:
                     smooth.astype(np.float32, copy=False)[None],
                     mask,
                     spec_key=self.prefix_smoothing_spec,
+                    prefix_smoothing_spec=self.prefix_smoothing_spec,
                     seed=event_seed,
                     device=self.device,
                     base_hysteresis=self.model.config.base_hysteresis,
                     lateral_offset_penalty=LATERAL_OFFSET_PENALTY,
                 )[0]
             finally:
-                torch.use_deterministic_algorithms(deterministic_before)
+                torch.use_deterministic_algorithms(
+                    deterministic_before, warn_only=warn_only_before
+                )
         rounded = np.rint(sampled)
         if not np.array_equal(sampled, rounded):
             raise RendererRuntimeError("float Renderer emitted non-integer reports")

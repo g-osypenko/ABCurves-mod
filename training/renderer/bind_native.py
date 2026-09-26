@@ -43,7 +43,7 @@ def write_binding(artifact: Path, receipt_path: Path, output: Path):
     config=struct.unpack_from('<11i',blob,136)
     adapter_crc=zlib.crc32(adapter)&0xffffffff
     record={'schema':'abcurves.renderer_native_binding.v1','mode':receipt['mode'],
-        'is_selected_release':digest=='8fea217f76c3f501dab9576cbac5cd26970d30d01eedb95da3ca3946a0f52f8b','artifact_sha256':digest,
+        'is_selected_release':digest=='405c34bceb55485dfd6bd3c0368bce079feea680a64c6b261904ef5b4713e240','artifact_sha256':digest,
         'artifact_bytes':44484,'export_receipt_sha256':hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
         'source_container_sha256':source,'fixed_body_crc32':f'{body_crc:08x}',
         'adapter_crc32':f'{adapter_crc:08x}','quantized_sampling_config':list(config),

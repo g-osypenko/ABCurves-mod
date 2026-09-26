@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from abcurves.data import load_dataset, subset
 from abcurves.preprocessing import (
     NativeCaptureExporterUnavailable,
     PORTABLE_EVENT_SCHEMA,
@@ -164,6 +165,45 @@ def test_portable_roundtrip_and_self_contained_prepared_output(tmp_path: Path) -
         assert float(data["event_weight"].sum()) == pytest.approx(1.0)
         assert set(data["source_trial_id"].astype(str)) == {"one"}
         assert "causal_seam_contract_json" in data.files
+
+
+@pytest.mark.parametrize("split", ["train", "val"])
+@pytest.mark.parametrize("selection", ["filter", "reorder", "repeat"])
+def test_subset_preserves_physical_event_references(tmp_path: Path, split, selection) -> None:
+    prepared, _ = save_prepared_dataset(
+        prepare_planner([
+            straight_event("a", split=split),
+            straight_event("b", target_x=200, stop_x=195, radius=20.0, split=split),
+        ]),
+        tmp_path / "prepared.npz",
+    )
+    arrays = load_dataset(prepared)
+    n = len(arrays["future_mask"])
+    selected_rows = {
+        "filter": arrays["source_trial_id"] == "b",
+        "reorder": np.arange(n - 1, -1, -1),
+        "repeat": np.asarray([n - 1, n - 1, 0]),
+    }[selection]
+    selected = subset(arrays, selected_rows)
+    physical_fields = (
+        "dxdy", "event_offsets", "event_source_trial_id", "target_rel_at_a",
+        "original_target_radius", "event_user_id", "event_session_id", "event_split",
+    )
+    for key in physical_fields:
+        np.testing.assert_array_equal(selected[key], arrays[key])
+    for key in ("future_mask", "source_trial_id", "row_event_index", "event_id", "event_weight"):
+        np.testing.assert_array_equal(selected[key], arrays[key][selected_rows])
+    np.testing.assert_array_equal(
+        selected["event_source_trial_id"][selected["row_event_index"]],
+        selected["source_trial_id"],
+    )
+    # Three repeated rows make the physical offsets length equal the row count.
+    # A second subset must still preserve that table and its references.
+    if selection == "repeat":
+        nested = subset(selected, np.asarray([0]))
+        for key in physical_fields:
+            np.testing.assert_array_equal(nested[key], arrays[key])
+        assert nested["event_source_trial_id"][nested["row_event_index"][0]] == "b"
 
 
 def test_cli_keeps_portable_event_input_for_planner(tmp_path: Path) -> None:

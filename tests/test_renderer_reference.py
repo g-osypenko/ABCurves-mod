@@ -8,6 +8,7 @@ import sys
 import numpy as np
 import pytest
 import torch
+import abcurves.renderer as renderer_module
 import training.train_renderer as train_renderer_module
 
 from abcurves import StaticPipeline as Pipeline
@@ -162,6 +163,71 @@ def test_float_sampler_rejects_noncanonical_context_lengths() -> None:
                 mask,
                 spec_key="triangular_moving_average_path:window=5",
             )
+
+
+@pytest.mark.parametrize("window", [None, 3])
+def test_float_renderer_uses_its_receipted_prefix_view(monkeypatch, window) -> None:
+    chosen = None if window is None else f"triangular_moving_average_path:window={window}"
+    model = renderer_module.FloatRendererModel(
+        ROOT / "models/renderer_global_h80_float.pt", prefix_smoothing_spec=chosen
+    )
+    with np.load(ROOT / "examples/data/static_event.npz") as fixture:
+        context = fixture["profile_raw_dxdy"].copy()
+    actual_windows = []
+    original_smooth = renderer_module.smooth_dxdy
+
+    def record_view(*args, **kwargs):
+        actual_windows.append(kwargs["spec"].window)
+        return original_smooth(*args, **kwargs)
+
+    monkeypatch.setattr(renderer_module, "smooth_dxdy", record_view)
+    model.render(context, np.tile([0.6, 0.2], (32, 1)), event_seed=7)
+    assert actual_windows == [5 if window is None else window]
+    assert model.receipt.prefix_smoothing_spec.endswith(f"window={actual_windows[0]}")
+
+
+def test_sampler_keeps_checkpoint_prefix_view_without_override(monkeypatch) -> None:
+    model = CountTextureModel(RendererConfig(
+        prefix_smoothing_spec="triangular_moving_average_path:window=5"
+    ))
+    original_smooth = renderer_module.smooth_dxdy
+    actual_windows = []
+
+    def record_view(*args, **kwargs):
+        actual_windows.append(kwargs["spec"].window)
+        return original_smooth(*args, **kwargs)
+
+    monkeypatch.setattr(renderer_module, "smooth_dxdy", record_view)
+    sample_count_streams(
+        model,
+        {"prefix_raw_dxdy": np.zeros((1, 256, 2), dtype=np.float32)},
+        np.zeros((1, 1, 2), dtype=np.float32),
+        np.ones((1, 1), dtype=np.float32),
+        spec_key="triangular_moving_average_path:window=3",
+    )
+    assert actual_windows == [5]
+
+
+@pytest.mark.parametrize("enabled,warn_only", [(False, False), (False, True), (True, False), (True, True)])
+@pytest.mark.parametrize("fail_sampling", [False, True])
+def test_float_renderer_restores_deterministic_policy(enabled, warn_only, fail_sampling) -> None:
+    model = renderer_module.FloatRendererModel(ROOT / "models/renderer_global_h80_float.pt")
+    before = (
+        torch.are_deterministic_algorithms_enabled(),
+        torch.is_deterministic_algorithms_warn_only_enabled(),
+    )
+    context = np.zeros((255 if fail_sampling else 256, 2), dtype=np.float32)
+    try:
+        torch.use_deterministic_algorithms(enabled, warn_only=warn_only)
+        if fail_sampling:
+            with pytest.raises(ValueError, match="prefix_raw_dxdy must have shape"):
+                model.render(context, np.zeros((1, 2)), event_seed=7)
+        else:
+            model.render(context, np.zeros((1, 2)), event_seed=7)
+        assert torch.are_deterministic_algorithms_enabled() is enabled
+        assert torch.is_deterministic_algorithms_warn_only_enabled() is warn_only
+    finally:
+        torch.use_deterministic_algorithms(before[0], warn_only=before[1])
 
 
 def test_teacher_forced_diagnostic_is_batch_partition_invariant() -> None:

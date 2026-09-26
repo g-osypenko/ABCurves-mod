@@ -47,9 +47,9 @@
     emit = ((uint64_t)(2U * renderer->last_emit_top23 + 1U) << ABC_PROB_Q) <
         (uint64_t)emit_probability * 2U * (UINT64_C(1) << 23U);
     safety =
-        abs_i64_u64(renderer->accumulator_q16[0]) >=
+        abs_i64_u64(accumulator_q16[0]) >=
             (uint32_t)model->config[CFG_FORCE_RELEASE_Q16] ||
-        abs_i64_u64(renderer->accumulator_q16[1]) >=
+        abs_i64_u64(accumulator_q16[1]) >=
             (uint32_t)model->config[CFG_FORCE_RELEASE_Q16];
     if (!safety) {
         int quiet =
@@ -58,9 +58,9 @@
             abs_i64_u64(smooth_dy_q16) <=
                 (uint32_t)model->config[CFG_ZERO_INTENT_Q16];
         int low_debt =
-            abs_i64_u64(renderer->accumulator_q16[0]) <
+            abs_i64_u64(accumulator_q16[0]) <
                 (uint32_t)model->config[CFG_ZERO_DEBT_Q16] &&
-            abs_i64_u64(renderer->accumulator_q16[1]) <
+            abs_i64_u64(accumulator_q16[1]) <
                 (uint32_t)model->config[CFG_ZERO_DEBT_Q16];
         if (quiet && low_debt) {
             emit = 0;
@@ -77,17 +77,17 @@
         }
     }
     mark[0] = (int32_t)round_div_even_i64(
-        renderer->accumulator_q16[0],
+        accumulator_q16[0],
         UINT64_C(1) << ABC_SMOOTH_Q
     );
     mark[1] = (int32_t)round_div_even_i64(
-        renderer->accumulator_q16[1],
+        accumulator_q16[1],
         UINT64_C(1) << ABC_SMOOTH_Q
     );
     for (row = 0U; row < 2U; ++row) {
         if (renderer->last_axis_nonzero[row] != 0 && mark[row] != 0 &&
             sign_i32(renderer->last_axis_nonzero[row]) != sign_i32(mark[row]) &&
-            abs_i64_u64(renderer->accumulator_q16[row]) <
+            abs_i64_u64(accumulator_q16[row]) <
                 (uint32_t)model->config[CFG_HYSTERESIS_Q16]) {
             mark[row] = 0;
         }
@@ -110,9 +110,9 @@
         mark[0] = 0;
         mark[1] = 0;
     }
-    next_acc[0] = (int64_t)renderer->accumulator_q16[0] -
+    next_acc[0] = (int64_t)accumulator_q16[0] -
         (int64_t)mark[0] * (INT64_C(1) << ABC_SMOOTH_Q);
-    next_acc[1] = (int64_t)renderer->accumulator_q16[1] -
+    next_acc[1] = (int64_t)accumulator_q16[1] -
         (int64_t)mark[1] * (INT64_C(1) << ABC_SMOOTH_Q);
     if (next_acc[0] < ABC_I32_MIN_VALUE || next_acc[0] > INT32_MAX ||
         next_acc[1] < ABC_I32_MIN_VALUE || next_acc[1] > INT32_MAX) {

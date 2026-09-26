@@ -1,10 +1,5 @@
 {
   "schema": "abcurves.showcase.provenance.v1",
-  "approved_html": {
-    "source": "abcurves_showcase_20260924/site/index.html",
-    "bytes": 2829213,
-    "sha256": "9a462d304fb2c33e019e7fae0f7f29384a6585d55637d773a302c3fdf99dbebb"
-  },
   "original_static_demo_sha256": "bc3a84c9740ddce3cec4a494fec286818d110049c49cb739e636c038c66be7be",
   "original_source_receipt_sha256": "34f79ebed76ed5efb53b99cdd779b7357283a71c8599a126ca993301df24b29c",
   "original_selection_sha256": "c60dd52ad9d6ae418bc479fec38e064a2dfbb8cc8643b284fa48ed62e9a75e4a",
@@ -16,23 +11,6 @@
     "encoding": "UTF-8 JSON in gzip; each motion retains its exact original base64 zlib block",
     "arrays": "Little-endian float64, float32 or int16; eight-byte-aligned offsets"
   },
-  "source_files": [
-    {
-      "file": "src/index.html",
-      "bytes": 7129,
-      "sha256": "940f2e4200978f31f3e28fa96093ec61e8fb8013e808b966817bf9c3d0fdd9d1"
-    },
-    {
-      "file": "src/styles.css",
-      "bytes": 12282,
-      "sha256": "003c2f57badfab3a5022d2ea800f11932f49020cf5fa59925819850eb11e2bcb"
-    },
-    {
-      "file": "src/app.js",
-      "bytes": 35720,
-      "sha256": "6d6645e5bf591463c82d1f2f3fdde27626df6f9c41256ca7724ea001e36403b3"
-    }
-  ],
   "selection": {
     "static": 24,
     "continuous": [

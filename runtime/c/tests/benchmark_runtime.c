@@ -163,7 +163,7 @@ int main(int argc, char **argv) {
     fprintf(out, "{\n");
     fprintf(out, "  \"schema\": \"abcurves.native_renderer_benchmark.v2\",\n");
     fprintf(out, "  \"status\": \"host_microbenchmark_not_usb_latency\",\n");
-    fprintf(out, "  \"artifact\": {\"bytes\": 44484, \"sha256\": \"8fea217f76c3f501dab9576cbac5cd26970d30d01eedb95da3ca3946a0f52f8b\"},\n");
+    fprintf(out, "  \"artifact\": {\"bytes\": 44484, \"sha256\": \"405c34bceb55485dfd6bd3c0368bce079feea680a64c6b261904ef5b4713e240\"},\n");
     fprintf(out, "  \"protocol\": {\"cycles\": %u, \"context_reports_per_cycle\": 256, \"generated_reports_per_cycle\": 800, \"timer\": \"monotonic high-resolution wall clock\", \"includes_timer_overhead\": true},\n", cycles);
 #ifdef _MSC_FULL_VER
     fprintf(out, "  \"compiler\": {\"family\": \"MSVC\", \"full_version\": %ld, \"reproducible_link\": true},\n", (long)_MSC_FULL_VER);

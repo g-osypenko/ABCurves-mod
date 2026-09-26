@@ -102,7 +102,7 @@ def test_renderer_manifest_binds_the_final_law() -> None:
     assert renderer["presentation_budget"] == 118_345
     assert renderer["lateral_offset_penalty"] == 1.5
     assert renderer["windows_x64_caller_state_bytes"] == 5_088
-    assert renderer["maximum_axis_emission_counts"] == 127
+    assert renderer["maximum_axis_emission_counts"] == 32767
     assert renderer["source_float_container_sha256"] == (
         "e9951a9bc25b69bf652cebbca8749badd02b8c0675a5f1ad4cde7f1a8624132a"
     )

@@ -4,6 +4,55 @@
 #include <stdlib.h>
 #include <string.h>
 
+static int check_wide_range(const abc_online_model_t *model) {
+    abc_online_renderer_t profile, state;
+    abc_fixed_report_t report;
+    const uint64_t seeds[] = {6U, 11U, 23U};
+    const int32_t limit = INT32_C(32767) * INT32_C(65536);
+    unsigned i, seed, direction;
+    if (model->fixed.config[6] != 32767) return 0; /* Custom sampling policy. */
+    if (abc_online_reset(&profile, model) != ABC_FIXED_OK) return 1;
+    for (i = 0; i < 256; ++i) {
+        if (abc_online_observe_raw(&profile, 0, 0) != ABC_FIXED_OK) return 2;
+    }
+    for (seed = 0; seed < 3; ++seed) {
+        for (direction = 0; direction < 8; ++direction) {
+            int32_t dx = direction & 1U ? -limit : limit;
+            int32_t dy = direction & 2U ? -limit : limit;
+            if (direction & 4U) dy = 0;
+            state = profile;
+            if (abc_online_begin(&state, seeds[seed]) != ABC_FIXED_OK) return 3;
+            for (i = 0; i < 2048; ++i) {
+                int64_t x = (int64_t)state.fixed.accumulator_q16[0] + dx;
+                int64_t y = (int64_t)state.fixed.accumulator_q16[1] + dy;
+                if (abc_online_step(&state, dx, dy, &report) != ABC_FIXED_OK) return 4;
+                if (report.dx == INT16_MIN || report.dy == INT16_MIN) return 5;
+                if (x - (int64_t)report.dx * 65536 != state.fixed.accumulator_q16[0] ||
+                    y - (int64_t)report.dy * 65536 != state.fixed.accumulator_q16[1]) return 6;
+                if (state.fixed.accumulator_q16[0] < -6 * 65536 ||
+                    state.fixed.accumulator_q16[0] > 6 * 65536 ||
+                    state.fixed.accumulator_q16[1] < -6 * 65536 ||
+                    state.fixed.accumulator_q16[1] > 6 * 65536) return 7;
+            }
+            if (abc_online_step(&state, -dx, -dy, &report) != ABC_FIXED_OK) return 8;
+            if (abc_online_step(&state, 0, 0, &report) != ABC_FIXED_OK) return 9;
+        }
+    }
+    state = profile;
+    if (abc_online_begin(&state, 6U) != ABC_FIXED_OK) return 10;
+    /* Exercise both the wide speed difference and the only overflowing dot sum. */
+    if (abc_online_step(&state, INT32_MIN, INT32_MIN, &report) != ABC_FIXED_OK ||
+        state.fixed.scratch.hot.feature[1] != 768) return 11;
+    if (abc_online_step(&state, INT32_MIN, INT32_MIN, &report) != ABC_FIXED_OK ||
+        state.fixed.scratch.hot.feature[2] != 0) return 12;
+    if (abc_online_step(&state, 0, 0, &report) != ABC_FIXED_OK ||
+        state.fixed.scratch.hot.feature[1] != -768) return 13;
+    /* Persistent intent beyond the output ceiling must still fail on debt overflow. */
+    state.fixed.accumulator_q16[0] = INT32_MAX;
+    if (abc_online_step(&state, INT32_MAX, 0, &report) != ABC_FIXED_ERR_RANGE) return 14;
+    return 0;
+}
+
 static unsigned char *load(const char *path, size_t *bytes) {
     FILE *f = fopen(path, "rb"); long n; unsigned char *p;
     if (!f || fseek(f, 0, SEEK_END)) return NULL;
@@ -34,6 +83,13 @@ int main(int argc, char **argv) {
         abc_online_renderer_size() != sizeof(renderer) ||
         abc_online_report_size() != sizeof(abc_fixed_report_t)) return 16;
     if (abc_online_model_init(&model, blob, bytes) != 0) return 3;
+    {
+        int wide_status = check_wide_range(&model);
+        if (wide_status) {
+            fprintf(stderr, "wide-range check failed: %d\n", wide_status);
+            return 50 + wide_status;
+        }
+    }
     if (model.fixed.blob != blob || model.adapter.blob != blob + ABC_ONLINE_FIXED_BYTES) return 4;
     if (abc_online_model_init(&model, blob, bytes - 1U) != ABC_FIXED_ERR_MODEL) return 5;
     blob[300U] ^= 1U;

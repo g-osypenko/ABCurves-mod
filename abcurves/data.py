@@ -36,6 +36,11 @@ import numpy as np
 
 SUCCESS_OUTCOMES = ("hit_click", "hit_dwell")
 
+_PHYSICAL_EVENT_FIELDS = frozenset({
+    "dxdy", "event_offsets", "event_source_trial_id", "target_rel_at_a",
+    "original_target_radius", "event_user_id", "event_session_id", "event_split",
+})
+
 
 def load_dataset(path: str | Path, *, success_only: bool = False) -> dict[str, np.ndarray]:
     """Load an ABCurves ``.npz`` dataset into a plain dict of arrays.
@@ -58,13 +63,13 @@ def load_dataset(path: str | Path, *, success_only: bool = False) -> dict[str, n
 
 
 def subset(arrays: dict[str, np.ndarray], mask_or_idx: np.ndarray) -> dict[str, np.ndarray]:
-    """Select a subset of events, leaving non-event metadata columns intact."""
+    """Select model rows, preserving the physical table and its row references."""
 
     n = len(arrays["future_mask"])
     out: dict[str, np.ndarray] = {}
     for key, value in arrays.items():
         arr = np.asarray(value)
-        if arr.ndim >= 1 and arr.shape[0] == n:
+        if key not in _PHYSICAL_EVENT_FIELDS and arr.ndim >= 1 and arr.shape[0] == n:
             out[key] = arr[mask_or_idx]
         else:
             out[key] = arr

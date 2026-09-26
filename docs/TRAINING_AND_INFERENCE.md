@@ -228,7 +228,7 @@ python -m training.static.train --data prepared/static --seed 23 --output runs/p
 ```
 
 `recipes/static/recipe.json` binds the frozen 86-session audit roster, its known
-quarantine, 21,302 training physical events from 59 sessions/58 installation keys,
+quarantine, 21,302 training physical events from 59 sessions/58 participants,
 361,080 ordered cuts (333,326 native and 27,754 tiny-target rows), and 1,885
 shrink-only target variants. Every audited event retains a decision/reason.
 
@@ -382,9 +382,9 @@ is emitted, that amount is reclaimed from the accumulator. Fractional movement i
 therefore remembered instead of lost independently at every tick.
 
 The release does **not** promise exact endpoint equality on every sampled stream.
-Offsets and finite endings can leave residual debt. The contract is that this debt is
-tracked, small, and bounded, with a safety release at magnitude 32 and an
-exact-zero/no-debt gate that keeps true zero intent silent.
+Offsets and finite endings can leave residual debt, which the accumulator tracks
+with a safety release at magnitude 32 and an exact-zero/no-debt gate that keeps
+true zero intent silent.
 
 ### Sampling calibration
 
@@ -399,7 +399,7 @@ The deployed artifact freezes these values:
 | Axis hysteresis | 0.5 |
 | Accumulator safety release | 32 |
 | Offset radius | 5 counts per axis |
-| Maximum output | signed int16 API; each emitted axis clamped to `+/-127` |
+| Maximum output | signed int16 API; each emitted axis clamped to `+/-32767` per 1 ms report |
 | Lateral-offset penalty | AF1.5, always enabled |
 
 AF1.5 is a soft safeguard for rare implausible sideways spikes. It penalizes offset
@@ -415,9 +415,9 @@ the quiet gate.
 
 ## Renderer training: presentations, not epochs
 
-The selected P0 training corpus contains 81,737 windows from 54 sessions and 45
-installation keys. Validation contains 10,807 windows from 8 sessions and 8 keys held out from
-Renderer training. It is not automatically a joint Planner-and-Renderer holdout,
+The selected P0 training corpus contains 81,737 windows from 54 sessions and
+45 participants. Validation contains 10,807 windows from 8 sessions and
+8 participants held out from Renderer training. It is not automatically a joint Planner-and-Renderer holdout,
 because the branches preserve different frozen split salts.
 
 A **presentation** means one source window shown once under one randomly selected
@@ -478,6 +478,10 @@ python training/train_renderer.py \
 Use `--device cpu` when CUDA is unavailable. The program memory-maps the prepared
 arrays, checks whole-user train/validation isolation, records data hashes, and refuses
 to overwrite the output.
+
+If PyTorch reports a cuBLAS determinism error during CUDA training or float
+rendering, set `CUBLAS_WORKSPACE_CONFIG=:4096:8` before starting Python. See
+[PyTorch's CUDA requirements](https://docs.pytorch.org/docs/2.9/generated/torch.use_deterministic_algorithms.html).
 
 The resulting float checkpoint is directly usable through the StaticPipeline API:
 
@@ -607,7 +611,7 @@ state stored by the reusable runtime profile. Despite the convenient API name,
 The artifact SHA-256 is:
 
 ```text
-8fea217f76c3f501dab9576cbac5cd26970d30d01eedb95da3ca3946a0f52f8b
+405c34bceb55485dfd6bd3c0368bce079feea680a64c6b261904ef5b4713e240
 ```
 
 ### Promotion fidelity
@@ -697,7 +701,7 @@ python -m training.renderer.build_adapter_cache --prefix prepared/renderer/rende
 python -m training.renderer.train_adapter --cache prepared/new-adapter --output runs/new-adapter
 python -m training.renderer.export_renderer --mode candidate --model runs/renderer_p118345.pt --adapter runs/new-adapter/adapter_int8.bin --adapter-receipt runs/new-adapter/receipt.json --out exports/renderer-new.bin
 python -m training.renderer.bind_native --artifact exports/renderer-new.bin --receipt exports/renderer-new.bin.json --output exports/renderer-binding
-cmake -S runtime/c -B builds/renderer-new -DABC_MODEL_BINDING_DIR="$PWD/exports/renderer-binding" -DABC_RENDERER_BLOB="$PWD/exports/renderer-new.bin"
+cmake -S runtime/c -B builds/renderer-new -DCMAKE_BUILD_TYPE=Release -DABC_MODEL_BINDING_DIR="$PWD/exports/renderer-binding" -DABC_RENDERER_BLOB="$PWD/exports/renderer-new.bin"
 cmake --build builds/renderer-new --config Release
 ctest --test-dir builds/renderer-new -C Release --output-on-failure
 ```

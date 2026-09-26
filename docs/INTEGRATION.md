@@ -22,7 +22,7 @@ are recorded in `constraints-tested.txt`.
 Windows includes the accepted native Renderer. On Linux/macOS, build it locally:
 
 ```bash
-cmake -S runtime/c -B runtime/c/build
+cmake -S runtime/c -B runtime/c/build -DCMAKE_BUILD_TYPE=Release
 cmake --build runtime/c/build --config Release
 ctest --test-dir runtime/c/build -C Release --output-on-failure
 ```
@@ -261,8 +261,8 @@ regression, timeout and outside-target conditions. A rejected first crossing is
 final; it does not wait for a later one. The training requirement of at least 12 ms
 future motion cannot be checked prospectively online.
 
-The paired study used 192 real-source cases across 38 sessions and 33 installation
-keys. Among 128 retained cases, 80% admitted 125 and 90% admitted 96. At 90%, 31 cases were rejected for insufficient remaining edge margin,
+The paired study used 192 real-source cases across 38 sessions and 33
+participants. Among 128 retained cases, 80% admitted 125 and 90% admitted 96. At 90%, 31 cases were rejected for insufficient remaining edge margin,
 compared with 2 at 80%; there were 29 additional rejections overall. Only 4/32 short
 cases below 80 initial edge counts were eligible at 90%, versus 30/32 at 80%.
 

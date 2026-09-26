@@ -22,14 +22,14 @@ Use `python web/build.py --output path/to/index.html` to choose another output l
 | `data/catalog.json` | Readable titles, metadata, thumbnails and ordered example IDs |
 | `data/motion.json.gz` | Frozen JSON containing the 50 exact compressed motion blocks |
 | `data/selection.json` | Continuous order and renderer comparison selection |
-| `data/provenance.json` | Original site hash, source identities, model and payload hashes, renderer profiles/seeds, and GIF receipts |
+| `data/provenance.json` | Source identities, model and payload hashes, renderer profiles/seeds, and GIF receipts |
 | `../assets/continuous_roaming.gif` | H18 README animation |
 | `../assets/continuous_switchbacks.gif` | H17 README animation |
 | `qa/verify.cjs` | Portable data, framing, gesture and playback checks |
 
 The motion JSON is ordinary UTF-8 JSON stored in gzip to keep the repository compact. `python web/build.py --dump-motion motion-inspection.json` writes a readable copy. Each record retains its original base64 zlib block and typed-array layout; rebuilding does not recompress or resample the motion. The arrays use little-endian integer or floating-point values at eight-byte-aligned offsets. Generated and recorded hardware reports remain integers at their original 1 ms cadence.
 
-Edit the HTML, CSS, JavaScript or catalog text and run `python web/build.py` to rebuild. `--verify-approved` additionally checks byte-for-byte equality with the reference page identified in provenance. Ordinary builds verify each motion payload and GIF independently of the page text.
+Edit the HTML, CSS, JavaScript or catalog text and run `python web/build.py` to rebuild. Each build verifies the motion payloads and GIFs independently of the page text.
 
 ## What the examples mean
 

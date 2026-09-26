@@ -28,10 +28,10 @@ import numpy as np
 
 CONTEXT_TICKS = 256
 ARTIFACT_BYTES = 44_484
-ARTIFACT_SHA256 = "8fea217f76c3f501dab9576cbac5cd26970d30d01eedb95da3ca3946a0f52f8b"
+ARTIFACT_SHA256 = "405c34bceb55485dfd6bd3c0368bce079feea680a64c6b261904ef5b4713e240"
 LATERAL_OFFSET_PENALTY = 1.5
 WINDOWS_NATIVE_BYTES = 37_888
-WINDOWS_NATIVE_SHA256 = "8efa2dfc43508a947f6afc4d41e120df1989385d3c7d0b437185cccf39284e6e"
+WINDOWS_NATIVE_SHA256 = "2f3b9c360def7817fd621658845831c96559f64da47b044d4ad5a0319bdc3719"
 
 
 class RendererRuntimeError(RuntimeError):
@@ -99,7 +99,7 @@ def default_library_path() -> Path:
                 return candidate
     raise RendererRuntimeError(
         f"native Renderer library is missing ({bundled}). Build it with "
-        "`cmake -S runtime/c -B runtime/c/build` followed by "
+        "`cmake -S runtime/c -B runtime/c/build -DCMAKE_BUILD_TYPE=Release` followed by "
         "`cmake --build runtime/c/build --config Release`, or set "
         "ABCURVES_RENDERER_LIBRARY."
     )

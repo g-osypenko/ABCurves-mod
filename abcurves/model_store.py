@@ -29,11 +29,11 @@ RELEASE_FILE_ANCHORS: dict[str, tuple[int, str]] = {
     ),
     "renderer_global_h80.bin": (
         44_484,
-        "8fea217f76c3f501dab9576cbac5cd26970d30d01eedb95da3ca3946a0f52f8b",
+        "405c34bceb55485dfd6bd3c0368bce079feea680a64c6b261904ef5b4713e240",
     ),
     "renderer_global_h80_float.pt": (
         144_457,
-        "696efe3bbcbc7e8991e26058bc9b8195285e5f5cb5e5f8cc5f64fcd30d1ac840",
+        "dd10ebe7d08011d7dbd91736e54a84faec4844f69a911a9dfd57eb83cd8b5e5c",
     ),
 }
 

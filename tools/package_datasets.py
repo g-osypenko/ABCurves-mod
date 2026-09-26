@@ -32,7 +32,7 @@ def main():
         parser.error("part limit must be 1..1900 MiB")
     stem = f"abcurves-{args.collection}-captures-{args.version}"
     inventory = {"schema": "abcurves.raw_release.v1", "license": "CC-BY-4.0",
-                 "attribution": "ABCurves datasets — Optima Manent and contributors",
+                 "attribution": "ABCurves datasets — Optima Manent",
                  "version": args.version, "collection": args.collection,
                  "capture_validator_sha256": sha256(validator),
                  "complete": False, "sessions": [], "parts": []}

@@ -1,4 +1,7 @@
-            (int64_t)renderer->last_smooth_q16[1] * smooth_y;
+        int64_t dot_y = (int64_t)renderer->last_smooth_q16[1] * smooth_y;
+        /* Two INT32_MIN axes can sum to 2^63; saturation preserves Q15 rounding. */
+        int64_t dot = dot_x > 0 && dot_y > INT64_MAX - dot_x
+            ? INT64_MAX : dot_x + dot_y;
         uint64_t denominator =
             (uint64_t)renderer->previous_speed_q16 * speed;
         int32_t cosine_q15 = ratio_q15(dot, denominator);
@@ -14,11 +17,11 @@
     }
 
     tangent_dot =
-        (int64_t)renderer->accumulator_q16[0] * renderer->tangent_q15[0] +
-        (int64_t)renderer->accumulator_q16[1] * renderer->tangent_q15[1];
+        accumulator_q16[0] * renderer->tangent_q15[0] +
+        accumulator_q16[1] * renderer->tangent_q15[1];
     normal_dot =
-        (int64_t)renderer->accumulator_q16[0] * normal_q15[0] +
-        (int64_t)renderer->accumulator_q16[1] * normal_q15[1];
+        accumulator_q16[0] * normal_q15[0] +
+        accumulator_q16[1] * normal_q15[1];
     previous_tangent_dot =
         (int64_t)renderer->previous_emit[0] * renderer->tangent_q15[0] +
         (int64_t)renderer->previous_emit[1] * renderer->tangent_q15[1];
@@ -172,6 +175,7 @@ int abc_fixed_step_q16(
     int emit;
     int safety;
     int32_t mark[2];
+    int64_t accumulator_q16[2];
     int64_t next_acc[2];
     int offset_x;
     int offset_y;
@@ -184,10 +188,14 @@ int abc_fixed_step_q16(
     }
     model = renderer->model;
     hot = &renderer->scratch.hot;
+    /* Keep pre-emission headroom without changing the stored-state ABI. */
+    accumulator_q16[0] = (int64_t)renderer->accumulator_q16[0] + smooth_dx_q16;
+    accumulator_q16[1] = (int64_t)renderer->accumulator_q16[1] + smooth_dy_q16;
     status = build_future_feature(
         renderer,
         smooth_dx_q16,
         smooth_dy_q16,
+        accumulator_q16,
         normal_q15
     );
     if (status != ABC_FIXED_OK) {

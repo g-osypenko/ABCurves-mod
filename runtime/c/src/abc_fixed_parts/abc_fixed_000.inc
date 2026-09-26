@@ -184,7 +184,7 @@ int abc_fixed_model_init(
 #else
 {
         24576, 50412, 87381, 436907, 32768, 2097152,
-        127, 0, 32768, 98304, 32768
+        32767, 0, 32768, 98304, 32768
     };
 #endif
     static const uint32_t section_offsets[7] = {
@@ -233,6 +233,8 @@ int abc_fixed_model_init(
             return ABC_FIXED_ERR_MODEL;
         }
     }
+    if (expected_config[CFG_MAX_ABS_COUNT] < 1 ||
+        expected_config[CFG_MAX_ABS_COUNT] > INT16_MAX) return ABC_FIXED_ERR_MODEL;
     for (index = 0U; index < 11U; ++index) {
         if (read_i32_le(blob + 136U + 4U * index) != expected_config[index]) {
             return ABC_FIXED_ERR_MODEL;

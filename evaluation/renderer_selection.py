@@ -305,7 +305,7 @@ class FloatSelectionRenderer:
             "offset_radius": 5,
             "base_hysteresis": 0.5,
             "force_release": 32.0,
-            "max_abs_count": 127,
+            "max_abs_count": 32767,
             "zero_intent_gate": True,
             "zero_intent_threshold": 1e-7,
             "zero_accumulator_threshold": 0.5,
@@ -367,6 +367,7 @@ class FloatSelectionRenderer:
     ) -> np.ndarray:
         mask = np.ones((1, len(smooth_future)), dtype=np.float32)
         previous = torch.are_deterministic_algorithms_enabled()
+        previous_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
         torch.use_deterministic_algorithms(True)
         try:
             sampled = sample_count_streams(
@@ -381,7 +382,7 @@ class FloatSelectionRenderer:
                 lateral_offset_penalty=AF15_LATERAL_PENALTY,
             )[0]
         finally:
-            torch.use_deterministic_algorithms(previous)
+            torch.use_deterministic_algorithms(previous, warn_only=previous_warn_only)
         return sampled
 
     def gate_eligibility(
@@ -475,8 +476,8 @@ def _validate_generated(value: np.ndarray, ticks: int) -> np.ndarray:
     rounded = np.rint(generated.astype(np.float64, copy=False))
     if not np.array_equal(generated, rounded):
         raise RendererSelectionError("renderer output is not an integer count stream")
-    if np.any(rounded < -127.0) or np.any(rounded > 127.0):
-        raise RendererSelectionError("renderer output exceeds the deployed +/-127 bound")
+    if np.any(rounded < -32767.0) or np.any(rounded > 32767.0):
+        raise RendererSelectionError("renderer output exceeds the deployed +/-32767 bound")
     return np.ascontiguousarray(rounded, dtype=np.int16)
 
 

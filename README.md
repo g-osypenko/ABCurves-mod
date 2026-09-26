@@ -263,21 +263,21 @@ the raw packet texture it recreates. Texture19 measures nineteen properties of t
 | Texture being compared | Distance |
 |---|---:|
 | Two independent samples from one real session | 0.150 |
-| The same person/setup in another session | 0.240 |
+| The same person in another session | 0.240 |
 | **Renderer output and the human session it follows** | **0.263** |
-| The closest different person/setup | 0.280 |
-| The average different person/setup | 0.639 |
+| The closest different person | 0.280 |
+| The average different person | 0.639 |
 
 At **0.263**, the Renderer lands inside the local human range. It is close to the same
 source recorded in another session, closer than the nearest different source, and
-**about 59% smaller than the average distance between different people or setups**.
+**about 59% smaller than the average distance between different people**.
 The global model recreates texture on the local human scale. Human movement itself
 sometimes varies more. In **3 of 35** same-session comparisons, two real-human samples
 were farther apart than the Renderer was from the human it followed.
 
 ### 2. Can it be detected without knowing the person first?
 
-The cold test hides every recording from the person or setup being judged and tests
+The cold test hides every recording from the person being judged and tests
 the complete ABCurves pipeline. Its human-safe judges **caught none of 1,280
 generated trials**. A broader search found 6 of 40 fully generated groups,
 but it also **accused genuine human movement** from 2 of 6 unseen humans. That is
@@ -338,7 +338,7 @@ Windows includes the native Renderer. On macOS or Linux, build it once before
 running the rendered examples below:
 
 ```bash
-cmake -S runtime/c -B runtime/c/build
+cmake -S runtime/c -B runtime/c/build -DCMAKE_BUILD_TYPE=Release
 cmake --build runtime/c/build --config Release
 ```
 

@@ -10,18 +10,16 @@ sealed contents. The explanatory outer names are:
 
 | Collection | Download | Contents |
 | --- | --- | --- |
-| Static | [abcurves-static-captures-2.0.0-part01.zip](https://github.com/optima-manent/ABCurves/releases/download/v2.0.0/abcurves-static-captures-2.0.0-part01.zip) | 114 sessions, 99 recorded installation IDs |
-| Tracking | [abcurves-tracking-captures-2.0.0-part01.zip](https://github.com/optima-manent/ABCurves/releases/download/v2.0.0/abcurves-tracking-captures-2.0.0-part01.zip) and [part02.zip](https://github.com/optima-manent/ABCurves/releases/download/v2.0.0/abcurves-tracking-captures-2.0.0-part02.zip) | 7 sessions, 6 recorded installation IDs; download both parts |
+| Static | [abcurves-static-captures-2.0.0-part01.zip](https://github.com/optima-manent/ABCurves/releases/download/v2.0.0/abcurves-static-captures-2.0.0-part01.zip) | 116 sessions from 101 participants |
+| Tracking | [abcurves-tracking-captures-2.0.0-part01.zip](https://github.com/optima-manent/ABCurves/releases/download/v2.0.0/abcurves-tracking-captures-2.0.0-part01.zip) and [part02.zip](https://github.com/optima-manent/ABCurves/releases/download/v2.0.0/abcurves-tracking-captures-2.0.0-part02.zip) | 7 sessions from 6 participants; download both parts |
 
-These are the intended v2.0.0 attachment URLs. They become available when the
-release is published. Each collection also has an inventory and SHA256 checksum
-file; each outer ZIP contains its own inventory, extraction instructions and data
-license. Session counts and installation IDs are not verified distinct-person
-counts. The community acknowledgement of more than 100 contributors refers to
-people who helped collect the project data, not an inference from these IDs.
+Each collection also has an inventory and SHA256 checksum file, and each outer
+ZIP contains its own inventory, extraction instructions and data license.
+Installation IDs identify participants, so multiple sessions can belong to the
+same person.
 
-Datasets and derived examples use [CC BY 4.0](../DATASET_LICENSE.md). Credit Optima
-Manent and the ABCurves contributors, link the source and license, and identify
+Datasets and derived examples use [CC BY 4.0](../DATASET_LICENSE.md). Credit
+ABCurves and its author, Optima Manent, link the source and license, and identify
 changes. Code uses [MIT](../LICENSE). Discord welcomes community discussion and
 new session contributions.
 
@@ -85,7 +83,7 @@ data. `--validate-only` omits export. `--limit N` is an explicit format smoke te
 never evidence that a complete corpus was processed. Keep raw sources available
 for integrity checks when resuming.
 
-The static collection produced 111 accepted exports and three recorded rejections:
+The static collection produced 113 accepted exports and three recorded rejections:
 
 | Session | Capture export rejection | Selected-model role |
 | --- | --- | --- |
@@ -319,7 +317,7 @@ events in one count array, with offsets marking event boundaries.
 | `target_radius` | `[N]` | Radius in the same raw-count space |
 | `outcome` | `[N]` | Terminal outcome such as `hit_click` |
 | `technical_outcome` | `[N]` | Capture/application failure or `none` |
-| `user_id` | `[N]` | Optional stable person/setup key |
+| `user_id` | `[N]` | Optional stable participant ID |
 | `session_id` | `[N]` | Optional session boundary |
 | `split` | `[N]` | Optional declared split such as `train` or `val` |
 

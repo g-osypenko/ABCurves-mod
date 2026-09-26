@@ -43,7 +43,7 @@
     "zero_intent_threshold_q16": 0,
     "zero_accumulator_threshold": 0.5,
     "safety_release_threshold": 32.0,
-    "maximum_axis_emission_counts": 127,
+    "maximum_axis_emission_counts": 32767,
     "lateral_offset_penalty_law": "offset_logit -= 1.5 * max(abs(offset dot normal) - 1 count, 0)",
     "generation_core": "int8/fixed-point",
     "observer_and_begin": "mixed float/double",
@@ -90,7 +90,7 @@
     "abcurves/_native/abcurves_renderer.dll": {
       "platform": "Windows x64",
       "bytes": 37888,
-      "sha256": "8efa2dfc43508a947f6afc4d41e120df1989385d3c7d0b437185cccf39284e6e",
+      "sha256": "2f3b9c360def7817fd621658845831c96559f64da47b044d4ad5a0319bdc3719",
       "public_exports": 8,
       "reproducible_link": "MSVC /Brepro"
     }
@@ -108,14 +108,14 @@
     },
     "renderer_global_h80.bin": {
       "bytes": 44484,
-      "sha256": "8fea217f76c3f501dab9576cbac5cd26970d30d01eedb95da3ca3946a0f52f8b",
+      "sha256": "405c34bceb55485dfd6bd3c0368bce079feea680a64c6b261904ef5b4713e240",
       "format": "ABCFIX1 off-row base followed by OHV1R16 online handoff adapter",
       "base_bytes": 39512,
       "adapter_bytes": 4972
     },
     "renderer_global_h80_float.pt": {
       "bytes": 144457,
-      "sha256": "696efe3bbcbc7e8991e26058bc9b8195285e5f5cb5e5f8cc5f64fcd30d1ac840",
+      "sha256": "dd10ebe7d08011d7dbd91736e54a84faec4844f69a911a9dfd57eb83cd8b5e5c",
       "tensor_sha256": "d09a4a269be583eac6e123bf6be9226bf8ee8e1c9fa8f51faed243b965187206",
       "source_container_sha256": "e9951a9bc25b69bf652cebbca8749badd02b8c0675a5f1ad4cde7f1a8624132a",
       "format": "sanitized phase-free 20-feature active float graph"

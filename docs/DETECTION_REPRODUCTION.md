@@ -22,16 +22,15 @@ python -m training.detection.prepare_frozen --exports prepared/capture-static --
 Preparation verifies the original raw-artifact identities, export files, native
 clock and entire count streams before constructing model rows. It creates:
 
-| Population | Rows | Sessions | Recorded installation keys |
+| Population | Rows | Sessions | Participants |
 | --- | ---: | ---: | ---: |
 | Human reference | 9,858 | 25 | 25 |
 | Held development | 3,834 | 10 | 6 |
 | Frozen generated panel | 320 | 10 | 6 |
 
-Human reference and held development use disjoint installation keys; the generated
-panel is selected from held development. These keys preserve grouping;
-they are not verified distinct-person counts. The 3,834 development rows are a
-different scientific input from the Static training validation set's 3,787 rows.
+Human reference and held development contain different participants, and the
+generated panel is selected from held development. The 3,834 development rows are
+a different scientific input from the Static training validation set's 3,787 rows.
 
 The seam is the first eligible edge-80 decision, with the measured minimum prefix
 24 ms, minimum future 12 ms, minimum remaining edge distance 8 counts, outside-target

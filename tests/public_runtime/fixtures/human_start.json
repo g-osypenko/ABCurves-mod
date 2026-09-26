@@ -6,7 +6,7 @@
   "episode_sha256": "748f7bcdc05baa2f1e2a118484c6cb2ef5ede4ce5d1303c43154e2408659e444",
   "cut_ms": 4000,
   "fixture_sha256": "dcc71780d2c047771d380ff68bf1a689e51fdbb41bfcafeef08cae4bdab3a831",
-  "attribution": "ABCurves datasets \u2014 Optima Manent and contributors",
+  "attribution": "ABCurves datasets \u2014 Optima Manent",
   "license": "CC-BY-4.0",
   "representation": "256 chronological genuine hardware bins, positive hardwareYdown;164rawcommonunitdisplacements andfiltered160samples, commonXright/Yup; observedanchor integratesrawbeforecausalW5; cut4000ms follows3376ms acquisition.",
   "source_reproduction": "Qualified rawarchive through canonical native report/frame/witness adapter and exact32report origin anchoring; sourceepisode arrays andfrozenhash matched before fixture extraction."

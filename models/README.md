@@ -69,10 +69,9 @@ The shared Renderer was trained on blind windows from complete dense sessions:
 256 observed physical reports | 800 future physical reports
 ```
 
-The selected full training split contains 81,737 windows, 54 sessions, and 45
-recorded installation keys. Validation contains 10,807 windows, 8 sessions, and
-8 installation keys held out from
-Renderer training. Planner and Renderer preserve different frozen split salts,
+The selected full training split contains 81,737 windows from 54 sessions and
+45 participants. Validation contains 10,807 windows from 8 sessions and
+8 participants held out from Renderer training. Planner and Renderer preserve different frozen split salts,
 so this is not by itself a joint whole-system holdout. No A, B, C, target, outcome,
 or success filter participates in Renderer windowing.
 
@@ -126,7 +125,7 @@ The deployment calibration is frozen with the artifact:
 | Axis hysteresis | 0.5 |
 | Safety release | 32 counts; evaluated before quiet gating |
 | Quiet gate | intent `<=1e-7` in float / exact zero in Q16, both debt axes `<0.5` |
-| Maximum emitted axis | `+/-127` counts |
+| Maximum emitted axis | `+/-32767` counts per 1 ms report |
 | Lateral-offset safeguard | `1.5 * max(abs(offset dot normal) - 1, 0)` logit penalty |
 
 The hot recurrence is fixed-point/int8 and costs 33,760 int8
@@ -142,7 +141,7 @@ is functionally portable but is not presented as an ESP32 timing result.
 The selected Renderer SHA-256 is:
 
 ```text
-8fea217f76c3f501dab9576cbac5cd26970d30d01eedb95da3ca3946a0f52f8b
+405c34bceb55485dfd6bd3c0368bce079feea680a64c6b261904ef5b4713e240
 ```
 
 The fixed-online eight-session promotion scored `S=1.4328467` versus `1.4311797` for its
@@ -221,7 +220,7 @@ The model image is platform-neutral data. The code that executes it lives in
 compile the same C99 source:
 
 ```bash
-cmake -S runtime/c -B runtime/c/build
+cmake -S runtime/c -B runtime/c/build -DCMAKE_BUILD_TYPE=Release
 cmake --build runtime/c/build --config Release
 ctest --test-dir runtime/c/build -C Release --output-on-failure
 ```

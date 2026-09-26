@@ -210,7 +210,7 @@ def test_selection_backends_authenticate_both_shipped_models() -> None:
     )
     native = NativeSelectionRenderer(ROOT / "models" / "renderer_global_h80.bin")
     assert native.identity["artifact_sha256"] == (
-        "8fea217f76c3f501dab9576cbac5cd26970d30d01eedb95da3ca3946a0f52f8b"
+        "405c34bceb55485dfd6bd3c0368bce079feea680a64c6b261904ef5b4713e240"
     )
     floating = FloatSelectionRenderer(
         ROOT / "models" / "renderer_global_h80_float.pt"
@@ -219,6 +219,29 @@ def test_selection_backends_authenticate_both_shipped_models() -> None:
         "d09a4a269be583eac6e123bf6be9226bf8ee8e1c9fa8f51faed243b965187206"
     )
     assert floating.identity["online_handoff"].startswith("absent")
+
+
+@pytest.mark.parametrize("enabled,warn_only", [(False, False), (False, True), (True, False), (True, True)])
+@pytest.mark.parametrize("fail", [False, True])
+def test_float_selection_restores_deterministic_state(monkeypatch, enabled, warn_only, fail) -> None:
+    renderer = FloatSelectionRenderer(ROOT / "models" / "renderer_global_h80_float.pt")
+    before = (torch.are_deterministic_algorithms_enabled(),
+              torch.is_deterministic_algorithms_warn_only_enabled())
+    if fail:
+        def sampling_error(*args, **kwargs):
+            raise RuntimeError("sampling probe failed")
+        monkeypatch.setattr("evaluation.renderer_selection.sample_count_streams", sampling_error)
+    try:
+        torch.use_deterministic_algorithms(enabled, warn_only=warn_only)
+        if fail:
+            with pytest.raises(RuntimeError, match="sampling probe failed"):
+                renderer.render(np.zeros((256, 2)), np.zeros((1, 2)), spec="w5", event_seed=7)
+        else:
+            renderer.render(np.zeros((256, 2)), np.zeros((1, 2)), spec="w5", event_seed=7)
+        assert torch.are_deterministic_algorithms_enabled() is enabled
+        assert torch.is_deterministic_algorithms_warn_only_enabled() is warn_only
+    finally:
+        torch.use_deterministic_algorithms(before[0], warn_only=before[1])
 
 
 def test_present_sanitization_receipt_is_strictly_verified(tmp_path) -> None:

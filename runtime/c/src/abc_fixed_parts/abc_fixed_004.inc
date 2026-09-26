@@ -173,15 +173,14 @@ static int build_future_feature(
     abc_fixed_renderer_t *renderer,
     int32_t smooth_x,
     int32_t smooth_y,
+    const int64_t accumulator_q16[2],
     int16_t normal_q15[2]
 ) {
     abc_fixed_hot_scratch_t *hot = &renderer->scratch.hot;
     const abc_fixed_model_t *model = renderer->model;
-    int64_t next_acc_x = (int64_t)renderer->accumulator_q16[0] + smooth_x;
-    int64_t next_acc_y = (int64_t)renderer->accumulator_q16[1] + smooth_y;
     uint32_t speed;
     int16_t new_tangent[2];
-    int32_t accel;
+    int64_t accel;
     int32_t curvature_q8 = 0;
     int64_t tangent_dot;
     int64_t normal_dot;
@@ -192,12 +191,6 @@ static int build_future_feature(
     uint32_t inactive = 0U;
     uint32_t index;
 
-    if (next_acc_x < ABC_I32_MIN_VALUE || next_acc_x > INT32_MAX ||
-        next_acc_y < ABC_I32_MIN_VALUE || next_acc_y > INT32_MAX) {
-        return ABC_FIXED_ERR_RANGE;
-    }
-    renderer->accumulator_q16[0] = (int32_t)next_acc_x;
-    renderer->accumulator_q16[1] = (int32_t)next_acc_y;
     normalize_q15(smooth_x, smooth_y, new_tangent, &speed);
     if (speed != 0U) {
         renderer->tangent_q15[0] = new_tangent[0];
@@ -206,12 +199,11 @@ static int build_future_feature(
     normal_q15[0] = (int16_t)-renderer->tangent_q15[1];
     normal_q15[1] = renderer->tangent_q15[0];
 
-    accel = (int32_t)((int64_t)speed - renderer->previous_speed_q16);
+    accel = (int64_t)speed - renderer->previous_speed_q16;
     if (accel < -(3 << ABC_SMOOTH_Q)) {
         accel = -(3 << ABC_SMOOTH_Q);
     } else if (accel > (3 << ABC_SMOOTH_Q)) {
         accel = 3 << ABC_SMOOTH_Q;
     }
     if (renderer->previous_speed_q16 > 0U && speed > 0U) {
-        int64_t dot =
-            (int64_t)renderer->last_smooth_q16[0] * smooth_x +
+        int64_t dot_x = (int64_t)renderer->last_smooth_q16[0] * smooth_x;

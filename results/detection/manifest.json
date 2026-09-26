@@ -14,8 +14,8 @@
       "sha256": "a960341a0e94a81c09254718d9be3202584da651fad2e03699afeaf2d9b49312"
     },
     "renderer_oracle_b80.json": {
-      "bytes": 4010,
-      "sha256": "72d921bed6d75a057015832a0e1f7345f48553d862624d58856e53a143e9c9ec"
+      "bytes": 3983,
+      "sha256": "9090d0395c92eea8559790c9154d28fed0617f754c98ca24bf80e5aa4356888e"
     },
     "pipeline_b80.json": {
       "bytes": 21034,

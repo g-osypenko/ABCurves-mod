@@ -148,7 +148,7 @@ Every command reads a pickle-free `.npz` with schema
 |---|---:|---|
 | `features` | `[N,D]` | Finite trajectory, texture and combined descriptors |
 | `origin` | `[N]` | `human` or `generated` |
-| `installation_key` | `[N]` | The complete identity unit held out by the cold test |
+| `installation_key` | `[N]` | Participant ID held out with all their sessions by the cold test |
 | `session_id` | `[N]` | Recorded session boundary |
 | `source_id` | `[N]` | Physical source-trial binding |
 | `order` | `[N]` | Event order for chronological groups |

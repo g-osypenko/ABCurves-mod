@@ -42,7 +42,7 @@
   },
   "known_matching_similarity_ruler": {
     "status": "descriptive_known_metadata_not_a_detector",
-    "identity_semantics": "installation_key is a persistent collection key used for leakage control; it is not a verified biological identity",
+    "identity_semantics": "installation_key identifies a participant and groups their sessions for leakage control",
     "point_estimates_only": true,
     "confidence_interval_claimed": false,
     "panels": {

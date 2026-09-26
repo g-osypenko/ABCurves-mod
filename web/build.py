@@ -76,8 +76,6 @@ def validate(catalog, motions, provenance):
 def build():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT.parent / 'docs/index.html')
-    parser.add_argument('--verify-approved', action='store_true',
-                        help='also require the exact approved HTML bytes, before editorial changes')
     parser.add_argument('--dump-motion', type=Path,
                         help='write readable motion JSON for inspection instead of building')
     args = parser.parse_args()
@@ -111,14 +109,11 @@ def build():
     if re.search(r'__[A-Z_]+__', template):
         raise ValueError('Unexpanded template placeholder')
     output = template.encode('utf8')
-    approved = sha(output) == provenance['approved_html']['sha256']
-    if args.verify_approved and not approved:
-        raise ValueError('Rebuilt HTML differs from the approved deliverable')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(output)
     (args.output.parent / '.nojekyll').touch()
     print(json.dumps({'output': str(args.output), 'examples': len(catalog), 'bytes': len(output),
-                      'sha256': sha(output), 'matches_approved_html': approved}, indent=2))
+                      'sha256': sha(output)}, indent=2))
 
 
 if __name__ == '__main__':

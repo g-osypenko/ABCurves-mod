@@ -197,7 +197,7 @@ different sampler.
 It is a measured comparison, not a statement that generated and human movement are
 literally identical. The study asks how far generated movement is from its matching
 human and compares that distance with variation between real sessions and different
-people or setups.
+people.
 
 Those matching relationships are useful for a similarity ruler, but an unknown-user
 detector is not allowed to know them. The distinction, final results, and

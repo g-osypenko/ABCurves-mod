@@ -16,11 +16,11 @@ import torch
 
 from .fixed_export_math import Params, Strategy, build_blob, make_luts
 
-FROZEN_FLOAT = "696efe3bbcbc7e8991e26058bc9b8195285e5f5cb5e5f8cc5f64fcd30d1ac840"
+FROZEN_FLOAT = "dd10ebe7d08011d7dbd91736e54a84faec4844f69a911a9dfd57eb83cd8b5e5c"
 FROZEN_TENSORS = "d09a4a269be583eac6e123bf6be9226bf8ee8e1c9fa8f51faed243b965187206"
 FROZEN_SOURCE = "e9951a9bc25b69bf652cebbca8749badd02b8c0675a5f1ad4cde7f1a8624132a"
 FROZEN_ADAPTER = "2a90e36c1b4c4b34b505ab73fcbfc6dfe7129e5cec209bd14e4447074b49ea13"
-FROZEN_COMBINED = "8fea217f76c3f501dab9576cbac5cd26970d30d01eedb95da3ca3946a0f52f8b"
+FROZEN_COMBINED = "405c34bceb55485dfd6bd3c0368bce079feea680a64c6b261904ef5b4713e240"
 FEATURES = (
     "speed_scaled", "accel", "curvature", "tangent_x", "tangent_y",
     "acc_tangent", "acc_normal", "prev_emit_tangent", "prev_emit_normal",
@@ -79,6 +79,8 @@ def load_params(path: Path):
         arrays[name]=np.ascontiguousarray(value.numpy())
     if not config.get("zero_intent_gate"):
         raise ValueError("the native law requires the zero-intent gate")
+    if type(config["max_abs_count"]) is not int or not 1 <= config["max_abs_count"] <= 32767:
+        raise ValueError("max_abs_count must be an integer in 1..32767 for signed-int16 output")
     for key in ("temperature","offset_magnitude_temperature","offset_direction_temperature"):
         if not np.isfinite(config[key]) or config[key]<=0:
             raise ValueError(f"invalid positive sampling control: {key}")

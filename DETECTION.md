@@ -58,24 +58,24 @@ behave more alike.
   the practical floor.
 - **Renderer vs matching human** compares generated output with genuine movements
   from the recording it is recreating.
-- **Average different human/setup** shows the much larger scale of ordinary
+- **Average different participant** shows the much larger scale of ordinary
   differences across unrelated recording sources.
 
-| What the judge sees | Real vs real, same session | Renderer vs matching human | Average different human/setup |
+| What the judge sees | Real vs real, same session | Renderer vs matching human | Average different participant |
 |---|---:|---:|---:|
 | Trajectory14 | 0.219 | **0.323** | 0.561 |
 | Texture19 | 0.150 | **0.263** | 0.639 |
 | Full49 | 0.157 | **0.243** | 0.509 |
 
 Texture19 is the cleanest answer because this experiment isolates the Renderer. Its
-distance to the matching human is **0.263**. The same person/setup recorded in
+distance to the matching human is **0.263**. The same person recorded in
 another session is 0.240, the closest different source is 0.280, and the average
 different source is 0.639.
 
 At **0.263**, the Renderer's texture sits inside the local human range. It is close to
 the same source recorded in another session, slightly closer than the nearest
 different source, and its measured distance is **about 59% smaller than the average
-different person or setup**. The combined Full49 view tells the same story. This is
+different person**. The combined Full49 view tells the same story. This is
 why I describe the global Renderer as reproducing texture on the local human scale
 rather than merely adding generic noise.
 
@@ -83,10 +83,8 @@ Human movement itself sometimes varies more. In **3 of 35** same-session compari
 two real-human samples were farther apart than the Renderer was from the human it
 followed. The human and Renderer ranges overlap.
 
-Here, a recording source is the persistent installation identifier used to keep
-related sessions together during evaluation. It is a practical person-and-setup
-grouping, not proof that one biological identity, mouse, or sensitivity remained
-unchanged forever.
+Here, each recording source identifies a participant, so sessions from the same
+person stay together during evaluation.
 
 ## 2. Can it be detected without seeing the person first?
 
@@ -105,12 +103,12 @@ The key distinction is what the detector already knows:
 
 | Test | What the detector receives beforehand | The question it answers |
 |---|---|---|
-| **Cold** | No movement from the person/setup being judged | Can ABCurves be caught for a new source without human false alarms? |
+| **Cold** | No movement from the person being judged | Can ABCurves be caught for a new source without human false alarms? |
 | **Warm** | Trusted clean movement from the exact same recorded session | In an unusually favorable laboratory setting, can the remaining difference be found? |
 
 These are different problems, not two thresholds for the same claim.
 
-### Cold: a completely new person or setup
+### Cold: a completely new person
 
 For each source being judged, the cold test:
 
@@ -158,7 +156,7 @@ With that unusually strong reference, some generated groups become detectable:
 With a clean matching session, the warm detector can find a strong difference in
 fully generated groups. That power depends on already owning a perfectly matched
 human reference. It is not available to a cold
-detector meeting a new person or setup.
+detector meeting a new person.
 
 The line is thin. Detecting 90% of the ABCurves groups came with a 5% human
 false-positive rate. Pushing the same detector to catch every ABCurves group raised
@@ -181,7 +179,7 @@ on what matching history can reveal.
 | Question | Answer on this panel |
 |---|---|
 | Does the Renderer reproduce the matching human's packet texture? | Yes. Its Texture19 distance sits inside the local human range, is about 59% below the average distance between unrelated sources, and overlaps real same-session variation. |
-| Can the tested detector catch ABCurves for a new person/setup? | Not reliably. The false-positive-free judges caught none of 1,280 generated trials. The broader search caught some output only by also accusing genuine human movement from 2 of 6 unseen humans. |
+| Can the tested detector catch ABCurves for a new person? | Not reliably. The false-positive-free judges caught none of 1,280 generated trials. The broader search caught some output only by also accusing genuine human movement from 2 of 6 unseen humans. |
 | What if a clean copy of the same session is already available? | Under that idealized assumption, the warm detector caught 90% of fully generated groups and flagged 2 of 40 held-human groups. |
 
 My conclusion is therefore simple. **Across these tests, I found no reliable,

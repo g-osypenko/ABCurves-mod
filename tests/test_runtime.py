@@ -316,5 +316,5 @@ def test_seed23_replication_shares_the_renderer(
         renderer_hash = runtime.renderer_receipt["artifact_sha256"]
     assert output.dtype == np.int16 and output.shape[1] == 2
     assert renderer_hash == (
-        "8fea217f76c3f501dab9576cbac5cd26970d30d01eedb95da3ca3946a0f52f8b"
+        "405c34bceb55485dfd6bd3c0368bce079feea680a64c6b261904ef5b4713e240"
     )
