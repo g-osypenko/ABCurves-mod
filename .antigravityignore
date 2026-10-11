@@ -1,0 +1,128 @@
+# .antigravityignore - Ignore patterns for Antigravity AI Agent & Indexer
+# Prevents token waste, crashes on large binaries, and indexing of runtime artifacts.
+
+# ==============================================================================
+# 1. Version Control & IDE Metadata
+# ==============================================================================
+.git/
+.github/
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# ==============================================================================
+# 2. Python Bytecode, Caches & Environments
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+parts/
+var/
+sdist/
+wheels/
+
+# ==============================================================================
+# 3. Testing, Coverage & Linters
+# ==============================================================================
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+
+# ==============================================================================
+# 4. Heavy Binary Models, Checkpoints & Weights
+# (Prevent agent token exhaustion; keep manifest.json and README.md visible)
+# ==============================================================================
+models/*.pt
+models/*.bin
+models/continuous/*.onnx
+models/continuous/*.pt
+models/continuous/*.npz
+*.npz
+*.bin
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Retain model manifests and architecture notes
+!models/**/manifest.json
+!models/**/README.md
+
+# ==============================================================================
+# 5. Native Binaries & Build Outputs
+# ==============================================================================
+*.dll
+*.so
+*.dylib
+*.pyd
+*.o
+*.obj
+*.exe
+*.a
+*.lib
+runtime/c/build/
+runtime/c/cmake-build-*/
+cmake-build-*/
+
+# ==============================================================================
+# 6. Media & Documentation Assets (Large Images, GIFs, Videos)
+# ==============================================================================
+assets/
+docs/_build/
+docs/build/
+*.gif
+*.png
+*.jpg
+*.jpeg
+*.mp4
+*.webm
+
+# ==============================================================================
+# 7. Benchmark Dumps, Local Results & Datasets
+# ==============================================================================
+results/local/
+results/performance/samples/
+results/performance/*.json
+results/qualification/*.json
+results/inference/*.json
+/runs/
+/prepared/
+/data/private/
+/data/**/*.parquet
+/data/**/*.csv
+/benchmark_local.json
+web/site/
+web/qa/verification.json
+*.log
+
+# ==============================================================================
+# 8. Temporary & OS Files
+# ==============================================================================
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+*.swp
+*~
+
