@@ -257,6 +257,61 @@ class ProDMP:
         xi1, xi2, h = self._components(t, tau, t_b)
         return xi1[:, None] * y_b[None, :] + xi2[:, None] * ydot_b[None, :] + h @ w_g
 
+    def _velocity_components(
+        self, t: np.ndarray, tau: float, t_b: float
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Time-derivatives ``(xi1', xi2', H')`` of :meth:`_components`.
+
+        Exact analytic mirror of :meth:`_components`.  The homogeneous
+        derivatives ``yd1, yd2`` returned by :func:`_critically_damped` are the
+        time-derivatives of ``y1, y2``; the phase-derivative basis ``dphi`` from
+        :meth:`_basis_at` supplies ``Phi'``.  With ``t_b = 0`` the ``phi_b`` and
+        ``phidot_b`` corrections vanish, so ``H'(t) = dPhi(t)/tau``.
+        """
+        t = np.asarray(t, dtype=np.float64).reshape(-1)
+        _, _, yd1, yd2 = _critically_damped(t, tau, self.alpha)
+        tb = np.asarray([float(t_b)], dtype=np.float64)
+        y1b, y2b, yd1b, yd2b = (float(v[0]) for v in _critically_damped(tb, tau, self.alpha))
+        det = y1b * yd2b - y2b * yd1b
+        if abs(det) < EPS:
+            det = EPS if det >= 0 else -EPS
+        # xi1 = (yd2b*y1 - yd1b*y2)/det  ->  xi1' = (yd2b*y1' - yd1b*y2')/det, y1'=yd1, y2'=yd2
+        xi1d = (yd2b * yd1 - yd1b * yd2) / det
+        xi2d = (y1b * yd2 - y2b * yd1) / det
+        xi3d = -xi1d
+        xi4d = -xi2d
+        phi_b, dphi_b = self._basis_at(np.asarray([t_b / tau]))
+        phidot_b = dphi_b[0] / tau  # velocity basis at the boundary (constant in t)
+        _, dphi_t = self._basis_at(t / tau)
+        hdot = dphi_t / tau + xi3d[:, None] * phi_b[0][None, :] + xi4d[:, None] * phidot_b[None, :]
+        return xi1d, xi2d, hdot
+
+    def velocity_at(
+        self,
+        t: np.ndarray,
+        w_g: np.ndarray,
+        *,
+        tau: float,
+        ydot_b: np.ndarray,
+        y_b: np.ndarray | None = None,
+        t_b: float = 0.0,
+    ) -> np.ndarray:
+        """Analytic velocities ``dy/dt`` at arbitrary times ``t`` for weights ``w_g``.
+
+        Exact time-derivative of :meth:`evaluate` (not a finite difference).
+        Used for :math:`C^1` splicing: a replanned segment inherits the previous
+        plan's boundary velocity ``dy/dt(delta_t)`` analytically, instead of a
+        noisy external ``dx/dt``.  At ``t -> t_b`` this returns ``ydot_b`` exactly.
+        """
+        w_g = np.atleast_2d(np.asarray(w_g, dtype=np.float64))
+        if w_g.shape[0] != self.n_weights:
+            raise ValueError(f"w_g must have {self.n_weights} rows, got {w_g.shape[0]}")
+        dof = w_g.shape[1]
+        y_b = np.zeros(dof, dtype=np.float64) if y_b is None else _as_dof_vector(y_b, dof)
+        ydot_b = _as_dof_vector(ydot_b, dof)
+        xi1d, xi2d, hdot = self._velocity_components(t, tau, t_b)
+        return xi1d[:, None] * y_b[None, :] + xi2d[:, None] * ydot_b[None, :] + hdot @ w_g
+
     def generate(
         self,
         w_g: np.ndarray,

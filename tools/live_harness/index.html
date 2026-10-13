@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ABCurves Live Harness</title>
+<style>
+  :root { color-scheme: dark; --bg:#0e1116; --panel:#161b22; --ink:#e6edf3; --muted:#8b949e;
+          --target:#f0883e; --cursor:#2f81f7; --trail:#2f81f7; --grid:#1c222b; --ok:#3fb950; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+              font:14px/1.4 ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif; }
+  #wrap { display:flex; flex-direction:column; height:100%; }
+  header { display:flex; flex-wrap:wrap; gap:14px; align-items:center;
+           padding:10px 14px; background:var(--panel); border-bottom:1px solid #222; }
+  header h1 { font-size:14px; margin:0; font-weight:600; letter-spacing:.3px; }
+  header .sp { flex:1; }
+  label { color:var(--muted); display:inline-flex; gap:6px; align-items:center; }
+  button { background:#21262d; color:var(--ink); border:1px solid #30363d; border-radius:6px;
+           padding:6px 12px; cursor:pointer; }
+  button:hover { border-color:#8b949e; }
+  input[type=range]{ vertical-align:middle; }
+  .stat { font-variant-numeric:tabular-nums; }
+  .stat b { color:var(--ink); font-weight:600; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; }
+  canvas { flex:1; display:block; width:100%; touch-action:none; cursor:crosshair; }
+  footer { padding:6px 14px; color:var(--muted); background:var(--panel); border-top:1px solid #222;
+           font-size:12px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <h1>ABCurves · Closed-loop live harness</h1>
+    <span class="stat"><span class="dot" style="background:var(--target)"></span>target (your mouse)</span>
+    <span class="stat"><span class="dot" style="background:var(--cursor)"></span>generated cursor</span>
+    <span class="sp"></span>
+    <label>drive
+      <select id="mode">
+        <option value="manual">manual · mouse</option>
+        <option value="circle">auto · circle</option>
+        <option value="figure8">auto · figure-8</option>
+        <option value="step">auto · steps</option>
+        <option value="random">auto · random</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="deadzone" checked> deadzone</label>
+    <label>curvature&nbsp;(B2′) <input type="range" id="gain" min="0" max="0.6" step="0.05" value="0.45"><span id="gainv" class="stat">0.45</span></label>
+    <label>speed
+      <select id="speed">
+        <option value="1">1× realtime</option>
+        <option value="0.5">0.5× slow-mo</option>
+        <option value="0.25">0.25× slow-mo</option>
+        <option value="0.1">0.1× slow-mo</option>
+        <option value="0.04">0.04× ultra</option>
+      </select>
+    </label>
+    <label>zoom <input type="range" id="zoom" min="0.25" max="6" step="0.05" value="1"><span id="zoomv" class="stat">1.0×</span></label>
+    <button id="fit">fit</button>
+    <button id="pause">⏸ pause</button>
+    <button id="reset">reset</button>
+  </header>
+  <canvas id="c"></canvas>
+  <footer>
+    <div>
+      <span class="stat">err <b id="err">0.0</b></span> ·
+      <span class="stat">pending <b id="pending">0</b></span> ·
+      <span class="stat">ticks <b id="ticks">0</b></span> ·
+      renderer <b id="rmode">?</b>
+    </div>
+    <div id="score" style="margin-top:4px">
+      <span class="stat">objective score (last 8 s):</span>
+      <span class="stat">RMS&nbsp;track <b id="m_rms">–</b></span> ·
+      <span class="stat">2⁄3&nbsp;β <b id="m_beta">–</b> (R²&nbsp;<b id="m_r2">–</b>)</span> ·
+      <span class="stat">smooth&nbsp;LDLJ <b id="m_ldlj">–</b></span> ·
+      <span class="stat">SPARC <b id="m_sparc">–</b></span> ·
+      <span class="stat">tremor&nbsp;8–12Hz <b id="m_tremor">–</b></span>
+    </div>
+    <div style="margin-top:4px; color:var(--muted)">
+      manual = move the mouse · auto = the program drives the target so the run is
+      reproducible. β≈0.33 &amp; high R² = human curvature; LDLJ/SPARC nearer 0 = smoother.
+    </div>
+  </footer>
+</div>
+<script>
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+const ui = { err:$('err'), pending:$('pending'), ticks:$('ticks'), rmode:$('rmode'),
+             modeSel:$('mode'), deadzone:$('deadzone'),
+             gain:$('gain'), gainv:$('gainv'),
+             zoom:$('zoom'), zoomv:$('zoomv'), speed:$('speed'), fit:$('fit'),
+             m_rms:$('m_rms'), m_beta:$('m_beta'), m_r2:$('m_r2'),
+             m_ldlj:$('m_ldlj'), m_sparc:$('m_sparc'), m_tremor:$('m_tremor') };
+ui.gain.addEventListener('input', ()=>{ ui.gainv.textContent = parseFloat(ui.gain.value).toFixed(2); });
+
+// The server now owns the scenario paths and the fixed 8 ms update cadence; the
+// browser only advances sim time, picks the mode, and sends the mouse target for
+// manual mode. The crosshair is drawn from the target the server reports back.
+let paused = false;
+const pauseBtn = document.getElementById('pause');
+pauseBtn.addEventListener('click', ()=>{
+  paused = !paused;
+  pauseBtn.textContent = paused ? '▶ resume' : '⏸ pause';
+  pauseBtn.style.borderColor = paused ? 'var(--ok)' : '';
+});
+let W=0,H=0,DPR=1, cx=0, cy=0;
+const FIT_COUNTS = 230;             // scenario half-extent we size the view to
+let baseScale = 1, zoom = 1, scale = 1;
+let speed = 1;                      // slow-mo factor (sim-ms per real-ms)
+let mousePx = null;                 // latest pointer position (css px)
+let cursorCount = [0,0];            // server-owned generated position (counts)
+let trail = [];                     // absolute cursor positions (counts)
+const TRAIL_MAX = 1400;
+
+function applyScale(){ scale = baseScale * zoom; ui.zoomv.textContent = zoom.toFixed(2)+'×'; }
+function resize(){
+  DPR = window.devicePixelRatio || 1;
+  const r = cv.getBoundingClientRect();
+  W = r.width; H = r.height; cx = W/2; cy = H/2;
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  baseScale = Math.max(0.2, Math.min(W, H) * 0.45 / FIT_COUNTS);  // auto-fit the scenario
+  applyScale();
+}
+window.addEventListener('resize', resize);
+
+function toCount(px){ return [ (px.x-cx)/scale, -(px.y-cy)/scale ]; }  // y-up
+function toPx(c){ return [ cx + c[0]*scale, cy - c[1]*scale ]; }
+
+cv.addEventListener('pointermove', e=>{
+  const r = cv.getBoundingClientRect();
+  mousePx = { x:e.clientX-r.left, y:e.clientY-r.top };
+});
+cv.addEventListener('pointerdown', e=>{
+  const r = cv.getBoundingClientRect();
+  mousePx = { x:e.clientX-r.left, y:e.clientY-r.top };
+});
+cv.addEventListener('wheel', e=>{                       // mouse-wheel zoom
+  e.preventDefault();
+  zoom = Math.min(6, Math.max(0.25, zoom * (e.deltaY < 0 ? 1.1 : 1/1.1)));
+  ui.zoom.value = zoom; applyScale();
+}, {passive:false});
+ui.zoom.addEventListener('input', ()=>{ zoom = parseFloat(ui.zoom.value); applyScale(); });
+ui.speed.addEventListener('change', ()=>{ speed = parseFloat(ui.speed.value); });
+ui.fit.addEventListener('click', ()=>{ zoom = 1; ui.zoom.value = 1; applyScale(); });
+document.getElementById('reset').addEventListener('click', doReset);
+
+async function doReset(){
+  await fetch('/api/reset',{method:'POST'});
+  cursorCount=[0,0]; trail=[]; targetCount=null;
+}
+
+let targetCount = null;   // last target reported by the server (for drawing)
+let inflight=false, last=performance.now(), simAcc=0;
+async function tick(now){
+  requestAnimationFrame(tick);
+  const dt = Math.max(1, Math.min(80, now-last));
+  last = now;
+  if(paused){ draw(); return; }     // freeze: inspect the trajectory, no advance
+  // slow-mo: advance only `speed` sim-ms per real-ms, carrying the fraction
+  simAcc += dt * speed;
+  const adv = Math.floor(simAcc); simAcc -= adv;
+  const mode = ui.modeSel.value;
+  const manual = (mode==='manual' && mousePx) ? toCount(mousePx) : null;
+
+  if(adv>0 && !inflight && !(mode==='manual' && manual===null)){
+    inflight=true;
+    try{
+      const res = await fetch('/api/frame',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ advance: adv, mode, manual,
+                               deadzone: ui.deadzone.checked, gain: parseFloat(ui.gain.value) })});
+      const d = await res.json();
+      cursorCount = d.cursor;
+      targetCount = d.target;
+      if(d.has_library===false){ ui.gain.disabled=true; ui.gainv.textContent='no lib'; }
+      for(const p of d.trail){ trail.push(p); }
+      if(trail.length>TRAIL_MAX) trail.splice(0, trail.length-TRAIL_MAX);
+      if(d.renderer) ui.rmode.textContent = d.renderer;
+      ui.err.textContent = d.err.toFixed(1);
+      ui.pending.textContent = d.pending;
+      ui.ticks.textContent = d.ticks;
+    }catch(e){}
+    inflight=false;
+  }
+  draw();
+}
+
+// periodic objective score of the last ~8 s of generated motion
+async function pollScore(){
+  try{
+    const d = await (await fetch('/api/score',{method:'POST'})).json();
+    const f = (v,n=2)=> (v==null||Number.isNaN(v)) ? '–' : v.toFixed(n);
+    ui.m_rms.textContent    = f(d.rms_error,1);
+    ui.m_beta.textContent   = f(d.two_thirds_beta);
+    ui.m_r2.textContent     = f(d.two_thirds_r2);
+    ui.m_ldlj.textContent   = f(d.ldlj,1);
+    ui.m_sparc.textContent  = f(d.sparc,1);
+    ui.m_tremor.textContent = f(d.tremor_8_12_frac);
+  }catch(e){}
+}
+setInterval(pollScore, 1200);
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth=1;
+  const step = 50*scale;
+  ctx.beginPath();
+  for(let x=cx% step; x<W; x+=step){ ctx.moveTo(x,0); ctx.lineTo(x,H); }
+  for(let y=cy% step; y<H; y+=step){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
+  ctx.stroke();
+  // origin crosshair
+  ctx.strokeStyle='#30363d'; ctx.beginPath();
+  ctx.moveTo(cx-8,cy); ctx.lineTo(cx+8,cy); ctx.moveTo(cx,cy-8); ctx.lineTo(cx,cy+8); ctx.stroke();
+
+  // trail (fading)
+  if(trail.length>1){
+    ctx.lineWidth=2; ctx.lineJoin='round';
+    for(let i=1;i<trail.length;i++){
+      const a=toPx(trail[i-1]), b=toPx(trail[i]);
+      const alpha = i/trail.length;
+      ctx.strokeStyle = `rgba(47,129,247,${(0.05+0.75*alpha).toFixed(3)})`;
+      ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke();
+    }
+  }
+  // target (mouse in manual mode, scripted in auto modes)
+  if(targetCount){
+    const tp=toPx(targetCount), tx=tp[0], ty=tp[1];
+    ctx.strokeStyle=getCSS('--target'); ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(tx,ty,9,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tx-13,ty); ctx.lineTo(tx+13,ty);
+    ctx.moveTo(tx,ty-13); ctx.lineTo(tx,ty+13); ctx.stroke();
+  }
+  // cursor
+  const c=toPx(cursorCount);
+  ctx.fillStyle=getCSS('--cursor');
+  ctx.beginPath(); ctx.arc(c[0],c[1],5,0,7); ctx.fill();
+}
+
+function getCSS(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+fetch('/api/frame',{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({advance:1,mode:'manual'})}).then(r=>r.json()).catch(()=>{});
+resize(); requestAnimationFrame(tick);
+</script>
+</body>
+</html>
