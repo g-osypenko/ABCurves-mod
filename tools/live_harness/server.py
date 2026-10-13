@@ -206,10 +206,17 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--horizon", type=int, default=250, help="ProDMP homing horizon (ms)")
-    ap.add_argument("--commit", type=int, default=12, help="committed ticks per replan")
-    ap.add_argument("--r-inner", type=float, default=2.0, help="deadzone inner radius (counts)")
-    ap.add_argument("--lam", type=float, default=1.0, help="deadzone sigmoid steepness")
+    d = ClosedLoopConfig()  # harness defaults track the controller's defaults
+    ap.add_argument("--horizon", type=int, default=d.horizon_ms, help="ProDMP homing horizon (ms)")
+    ap.add_argument("--commit", type=int, default=d.commit_ms, help="min committed ticks per replan")
+    ap.add_argument("--r-inner", type=float, default=d.r_inner, help="deadzone inner radius (counts)")
+    ap.add_argument("--lam", type=float, default=d.deadzone_lambda, help="deadzone sigmoid steepness")
+    ap.add_argument("--ff", choices=("off", "raw", "alpha_beta"), default=d.target_ff,
+                    help="target-velocity feedforward (predictive pursuit)")
+    ap.add_argument("--lead-frac", type=float, default=d.ff_lead_frac,
+                    help="feedforward lead as a fraction of the horizon")
+    ap.add_argument("--motor-noise", type=float, default=d.motor_noise_rel,
+                    help="signal-dependent motor noise (fraction of speed)")
     ap.add_argument("--forcing-lib", default="models/continuous/forcing_lib.npz",
                     help="baked B2' library; ignored if the file is absent")
     ap.add_argument("--gain", type=float, default=0.45, help="initial B2' curvature gain")
@@ -225,6 +232,9 @@ def main() -> None:
         r_inner=args.r_inner,
         deadzone_lambda=args.lam,
         forcing_gain=args.gain,
+        target_ff=args.ff,
+        ff_lead_frac=args.lead_frac,
+        motor_noise_rel=args.motor_noise,
     )
     lib_path = Path(args.forcing_lib)
     library = ForcingLibrary.load(lib_path) if lib_path.is_file() else None
@@ -235,6 +245,8 @@ def main() -> None:
     shown = _lan_ip() if args.host == "0.0.0.0" else args.host
     print(f"Renderer: {Handler.engine.mode}  |  B2' library: "
           f"{'loaded ' + str(len(library)) + ' shapes' if library else 'none (B1 homing)'}")
+    print(f"Config: horizon {config.horizon_ms} ms | feedforward {config.target_ff} "
+          f"(lead {config.ff_lead_frac:g}x horizon) | motor noise {config.motor_noise_rel:g}")
     print(f"Live harness on  http://{shown}:{args.port}  (local: http://127.0.0.1:{args.port})")
     print("Ctrl-C to stop.")
     try:

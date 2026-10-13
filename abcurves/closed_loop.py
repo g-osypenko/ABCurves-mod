@@ -43,10 +43,15 @@ class ClosedLoopConfig:
     renderer's canonical x-right/y-up native mouse counts.
     """
 
-    horizon_ms: int = 250
-    """Full ProDMP homing horizon ``tau``; only ``commit_ms`` of it is applied."""
+    horizon_ms: int = 320
+    """Full ProDMP homing horizon ``tau``; only ``commit_ms`` of it is applied.
+
+    320 (was 250): the longer horizon removes the reach "crawl" tail (Texture19
+    0.35 -> 0.28); the pursuit lag it would cost is cancelled by ``target_ff``."""
     commit_ms: int = 12
-    """How much of each plan is committed before the next replan (receding)."""
+    """Minimum slice of each plan committed before the next replan (receding).
+    The commit is always extended to cover the update interval (``dt + 2``), so
+    slower target updates never leave the renderer idling between replans."""
     min_horizon_ms: int = 60
     horizon_fitts_b: float = 0.0
     """Time-to-go horizon (Hoff & Arbib): when > 0, each replan uses
@@ -101,6 +106,28 @@ class ClosedLoopConfig:
     are noisier along the movement than across it)."""
     motor_noise_tau_ms: float = 0.0
     """Correlation time of the motor noise (first-order, OU); 0 -> white."""
+    target_ff: str = "alpha_beta"
+    """Target-velocity feedforward (predictive pursuit): ``"off"``, ``"raw"``
+    (plain ``dx/dt`` of the target -- amplifies observation jitter, pathology #3)
+    or ``"alpha_beta"`` (fixed-gain steady-state Kalman tracker, ~10 flops per
+    update).  The target's absolute position is the controller's own exactly-known
+    cursor (sum of its reports) plus the observed error; the plan then homes to
+    where the target *will be* ``ff_lead_ms`` ahead, which removes the steady
+    pursuit lag of pure homing.  Measured (P4): mean pursuit RMS 37.5 -> ~14 at
+    unchanged jitter robustness; ``"raw"`` is ~10% tighter but fails the
+    target-jitter gate, so it is opt-in only."""
+    ff_lead_frac: float = 0.3
+    """Prediction lead as a fraction of the homing horizon ``tau`` (the receding
+    homing lag scales with ``tau``; 0.3 is the measured optimum at 8 and 16 ms
+    update cadence)."""
+    ff_alpha: float = 0.5
+    ff_beta: float = 0.2
+    ff_gate: float = 40.0
+    """Innovation gate (counts): a larger surprise is a target *jump*, not motion,
+    so the estimator re-initialises (velocity 0) instead of inventing a huge
+    phantom velocity that would overshoot the new target."""
+    ff_vmax: float = 10.0
+    """Clamp on the estimated target speed (counts/ms)."""
     event_seed: int = 7
     prodmp: ProDMPConfig = field(default_factory=ProDMPConfig)
 
@@ -177,6 +204,9 @@ class ClosedLoopProDMPController:
         self._time_since_plan = 0
         self._shape = None
         self._noise_state = np.zeros(2)
+        self._cursor = np.zeros(2)  # sum of emitted reports (exact, integer)
+        self._tgt_pos: Optional[np.ndarray] = None
+        self._tgt_vel = np.zeros(2)
         self.last_analytical_vel = (
             np.zeros(2)
             if initial_velocity is None
@@ -218,6 +248,36 @@ class ClosedLoopProDMPController:
         z = cfg.deadzone_lambda * (r - cfg.r_inner - cfg.deadzone_eps)
         # clip keeps exp finite for large |z|
         return float(1.0 / (1.0 + np.exp(-np.clip(z, -60.0, 60.0))))
+
+    def _update_target_velocity(self, target: np.ndarray, dt: float) -> np.ndarray:
+        """Estimate the target's velocity (counts/ms) from one observation."""
+        cfg = self.config
+        z = self._cursor + target  # absolute target position
+        dt = max(float(dt), 1e-3)
+        if self._tgt_pos is None:
+            self._tgt_pos = z.copy()
+            self._tgt_vel = np.zeros(2)
+            return self._tgt_vel
+        pred = self._tgt_pos + self._tgt_vel * dt
+        innov = z - pred
+        if float(np.hypot(innov[0], innov[1])) > cfg.ff_gate:
+            # a jump, not motion: re-acquire without a phantom velocity
+            self._tgt_pos = z.copy()
+            self._tgt_vel = np.zeros(2)
+            return self._tgt_vel
+        if cfg.target_ff == "raw":
+            vel = (z - self._tgt_pos) / dt
+            self._tgt_pos = z.copy()
+        elif cfg.target_ff == "alpha_beta":
+            self._tgt_pos = pred + cfg.ff_alpha * innov
+            vel = self._tgt_vel + (cfg.ff_beta / dt) * innov
+        else:
+            raise ValueError(f"unknown target_ff {cfg.target_ff!r}")
+        speed = float(np.hypot(vel[0], vel[1]))
+        if speed > cfg.ff_vmax:
+            vel = vel * (cfg.ff_vmax / speed)
+        self._tgt_vel = vel
+        return vel
 
     def _horizon(self, r: float) -> float:
         """Homing horizon ``tau`` (ms): constant, or Fitts time-to-go of ``r``."""
@@ -279,6 +339,13 @@ class ClosedLoopProDMPController:
         else:
             ydot_b = self.last_analytical_vel.copy()
 
+        tau = int(max(cfg.min_horizon_ms, self._horizon(float(np.hypot(*target)))))
+
+        # (1b) Predictive pursuit: aim where the target will be (feedforward).
+        if cfg.target_ff != "off":
+            lead = cfg.ff_lead_frac * tau
+            target = target + self._update_target_velocity(target, dt) * lead
+
         # (2) Deadzone damping of the error vector (smooth, no wall slam).
         r = float(np.hypot(target[0], target[1]))
         goal = target.copy()
@@ -286,7 +353,6 @@ class ClosedLoopProDMPController:
             goal *= self._deadzone_scale(r)
 
         # (3) Macro-plan: ProDMP homing to goal over a receding horizon.
-        tau = int(max(cfg.min_horizon_ms, self._horizon(r)))
         w_eff = np.zeros((self.prodmp.n_weights, 2), dtype=np.float64)
         w_eff[:-1] = self._forcing_rows(goal, ydot_b, tau)  # macro curvature (B2') or 0 (B1)
         w_eff[-1] = goal  # goal row -> homes to target (goal_mode='target' equivalent)
@@ -295,7 +361,7 @@ class ClosedLoopProDMPController:
         )
 
         # (4) Commit only the near slice; the next update replans (receding).
-        commit = int(min(cfg.commit_ms, len(deltas)))
+        commit = int(min(max(cfg.commit_ms, int(np.ceil(dt)) + 2), len(deltas)))
         self._buffer = deque(deltas[:commit])
         self._plan = _Plan(w_g=w_eff, ydot_b=ydot_b, tau=float(tau), y_b=np.zeros(2))
         self._time_since_plan = 0
@@ -343,6 +409,7 @@ class ClosedLoopProDMPController:
         else:
             delta = (0.0, 0.0)
         report = self._stream.step(delta)
+        self._cursor += report
         self._time_since_plan += 1
         return report
 

@@ -18,6 +18,9 @@ local only.
 ```bash
 python tools/live_harness/server.py --host 127.0.0.1 --port 9000
 python tools/live_harness/server.py --update-ms 8 --gain 0.45 --reach 200 --period-ms 2600
+# compare predictive pursuit live (defaults follow ClosedLoopConfig):
+python tools/live_harness/server.py --ff off --horizon 250        # old behaviour
+python tools/live_harness/server.py --ff raw --port 8766          # plain dx/dt (jitter-prone)
 ```
 
 On Python 3.11+ run it directly; this repo's continuous stack targets 3.11+, but

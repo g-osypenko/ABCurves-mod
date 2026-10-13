@@ -214,3 +214,44 @@ def test_fitts_horizon_shrinks_with_error() -> None:
     assert all(a < b for a, b in zip(taus, taus[1:]))
     # off by default -> constant horizon
     assert ClosedLoopConfig().horizon_fitts_b == 0.0
+
+
+def _ff_controller(**cfg) -> ClosedLoopProDMPController:
+    try:
+        return ClosedLoopProDMPController(config=ClosedLoopConfig(**cfg))
+    except RendererRuntimeError as exc:  # pragma: no cover - platform dependent
+        pytest.skip(f"native Renderer unavailable: {exc}")
+
+
+def test_alpha_beta_tracks_constant_target_velocity() -> None:
+    ctl = _ff_controller(target_ff="alpha_beta")
+    v_true = np.array([1.5, -0.5])  # counts/ms
+    vel = np.zeros(2)
+    for k in range(80):  # cursor stays at 0 -> offset == absolute target
+        vel = ctl._update_target_velocity(v_true * 8.0 * k, 8.0)
+    np.testing.assert_allclose(vel, v_true, atol=0.02)
+
+
+def test_target_jump_is_gated_not_a_phantom_velocity() -> None:
+    for mode in ("alpha_beta", "raw"):
+        ctl = _ff_controller(target_ff=mode)
+        for _ in range(10):
+            ctl._update_target_velocity(np.array([0.0, 0.0]), 8.0)
+        vel = ctl._update_target_velocity(np.array([220.0, -90.0]), 8.0)  # a step jump
+        np.testing.assert_allclose(vel, 0.0)
+
+
+def test_static_target_gets_no_feedforward_lead() -> None:
+    ctl = _ff_controller()
+    assert ctl.config.target_ff == "alpha_beta"  # on by default (P4)
+    for _ in range(20):
+        vel = ctl._update_target_velocity(np.array([150.0, 40.0]), 8.0)
+    np.testing.assert_allclose(vel, 0.0, atol=1e-9)
+
+
+def test_commit_covers_the_update_interval() -> None:
+    ctl = _ff_controller(commit_ms=12)
+    assert ctl.on_target_update((150.0, 0.0), 8) == 12
+    # slower updates must not leave the renderer idling until the next replan
+    assert ctl.on_target_update((150.0, 0.0), 16) >= 16
+    assert ctl.on_target_update((150.0, 0.0), 40) >= 40

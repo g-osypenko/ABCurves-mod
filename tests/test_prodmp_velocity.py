@@ -60,3 +60,16 @@ def test_velocity_at_matches_velocity_basis(dmp: ProDMP) -> None:
     t = np.arange(1, d + 1, dtype=np.float64)
     va = dmp.velocity_at(t, w, tau=float(d), ydot_b=np.zeros(2), y_b=np.zeros(2), t_b=0.0)
     assert np.allclose(vb, va, atol=1e-12)
+
+
+def test_vectorised_basis_matches_per_column_interp() -> None:
+    """The vectorised ``_basis_at`` must equal the reference per-column np.interp."""
+    dmp = ProDMP()
+    s = np.concatenate([np.linspace(0.0, 1.0, 997), [0.0, 1.0, -0.2, 1.3, 0.5]])
+    phi, dphi = dmp._basis_at(s)
+    sc = np.clip(s, 0.0, 1.0)
+    for j in range(dmp.n_weights):
+        np.testing.assert_allclose(phi[:, j], np.interp(sc, dmp._s_grid, dmp._phi_grid[:, j]),
+                                   rtol=0, atol=1e-12)
+        np.testing.assert_allclose(dphi[:, j], np.interp(sc, dmp._s_grid, dmp._dphi_grid[:, j]),
+                                   rtol=0, atol=1e-12)

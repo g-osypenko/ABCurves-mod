@@ -160,13 +160,16 @@ class ProDMP:
     # Basis sampling
     # ------------------------------------------------------------------
     def _basis_at(self, s_values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        # Linear interpolation on the uniform s-grid, vectorised over all basis
+        # columns at once (same result as a per-column np.interp, ~20x cheaper:
+        # this sits on the closed-loop replan path).
         s = np.clip(np.asarray(s_values, dtype=np.float64).reshape(-1), 0.0, 1.0)
-        phi = np.empty((len(s), self.n_weights), dtype=np.float64)
-        dphi = np.empty((len(s), self.n_weights), dtype=np.float64)
-        grid = self._s_grid
-        for j in range(self.n_weights):
-            phi[:, j] = np.interp(s, grid, self._phi_grid[:, j])
-            dphi[:, j] = np.interp(s, grid, self._dphi_grid[:, j])
+        cells = len(self._s_grid) - 1
+        x = s * cells
+        i = np.minimum(x.astype(np.int64), cells - 1)
+        f = (x - i)[:, None]
+        phi = self._phi_grid[i] * (1.0 - f) + self._phi_grid[i + 1] * f
+        dphi = self._dphi_grid[i] * (1.0 - f) + self._dphi_grid[i + 1] * f
         return phi, dphi
 
     def phase(self, duration: int) -> np.ndarray:
