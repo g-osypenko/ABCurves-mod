@@ -171,3 +171,46 @@ def test_deadzone_scale_is_monotone_and_damps_inside(
     assert inside < edge < outside  # smooth, monotone (no wall slam)
     assert inside < 0.5 <= outside
     assert outside > 0.99  # far outside, error passes through essentially intact
+
+
+def test_motor_noise_is_signal_dependent_and_direction_preserving(
+    controller: ClosedLoopProDMPController,
+) -> None:
+    cfg = controller.config
+    assert cfg.motor_noise_rel > 0.0  # on by default (P3 texture)
+    # zero command -> zero noise: no idle jitter from the motor-noise term
+    assert controller._add_motor_noise((0.0, 0.0)) == (0.0, 0.0)
+    # pure-x command -> noise stays on x (no per-axis sign flicker on y)
+    rng_state = controller._rng.bit_generator.state
+    out = np.array([controller._add_motor_noise((1.5, 0.0)) for _ in range(500)])
+    controller._rng.bit_generator.state = rng_state
+    assert np.all(out[:, 1] == 0.0)
+    assert np.all(out[:, 0] > 0.0)  # never reverses the commanded direction
+    rel_std = float(np.std(out[:, 0] / 1.5))
+    assert 0.5 * cfg.motor_noise_rel < rel_std < 1.5 * cfg.motor_noise_rel
+
+
+def test_initial_velocity_handoff_is_c1(controller: ClosedLoopProDMPController) -> None:
+    v0 = np.array([2.0, -1.0])
+    controller.reset(initial_velocity=v0)
+    controller.on_target_update((150.0, -60.0), 8)
+    # the first plan starts from the handed-off velocity, not from rest
+    _, vel = controller.get_analytical_state_at(0.0)
+    np.testing.assert_allclose(vel, v0, atol=1e-9)
+    controller.reset()
+    np.testing.assert_allclose(controller.last_analytical_vel, 0.0)
+
+
+def test_fitts_horizon_shrinks_with_error() -> None:
+    try:
+        ctl = ClosedLoopProDMPController(
+            config=ClosedLoopConfig(horizon_fitts_a=100.0, horizon_fitts_b=60.0)
+        )
+    except RendererRuntimeError as exc:  # pragma: no cover - platform dependent
+        pytest.skip(f"native Renderer unavailable: {exc}")
+    taus = [ctl._horizon(r) for r in (0.0, 16.0, 64.0, 256.0)]
+    assert taus[0] == pytest.approx(100.0)
+    assert taus[1] == pytest.approx(160.0)
+    assert all(a < b for a, b in zip(taus, taus[1:]))
+    # off by default -> constant horizon
+    assert ClosedLoopConfig().horizon_fitts_b == 0.0

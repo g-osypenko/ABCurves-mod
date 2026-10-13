@@ -9,7 +9,9 @@ The headline rule mirrors the detection study: texture is "inside the human
 range" when the generated-vs-human distance is not larger than the distance
 *between humans themselves*.  Each generated reach uses the renderer-context
 (hand/mouse texture profile) of the human row it is matched to, so only the
-generator's texture differs, not the device.
+generator's texture differs, not the device.  Each row gets its own event seed
+(a shared seed flatters the score), and since human rows start mid-flight at
+point B, the generator inherits the prefix's final velocity (``initial_velocity``).
 
 Usage::
 
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -76,11 +79,15 @@ def _stable_half(ids, namespace: str) -> np.ndarray:
 
 
 # --- generate one closed-loop reach as 1 kHz integer reports --------------------
-def generate_reach(model, ctx_int16, target, duration, *, library, gain, update_ms=8):
-    cfg = ClosedLoopConfig(event_seed=7, forcing_gain=gain)
+def generate_reach(model, ctx_int16, target, duration, *, library, gain, update_ms=8,
+                   event_seed=7, initial_velocity=None):
+    cfg = ClosedLoopConfig(event_seed=event_seed, forcing_gain=gain)
     ctl = ClosedLoopProDMPController(
         config=cfg, renderer_model=model, renderer_context=ctx_int16, forcing_library=library
     )
+    if initial_velocity is not None:
+        # human rows start mid-flight at point B: hand the motion off (C^1)
+        ctl.reset(initial_velocity=initial_velocity)
     cursor = np.zeros(2)
     reports = []
     t = 0
@@ -128,20 +135,29 @@ def main() -> None:
     gmask = {"B1": [], "B2'": []}
     hmax = int(human_dxdy.shape[1])
     for i in range(len(sel)):
+        if i % 16 == 0 or i == len(sel) - 1:
+            print(f"\r  generating B1 + B2' reaches: {i + 1}/{len(sel)}", end="",
+                  file=sys.stderr, flush=True)
         pre = prefix_dxdy[i][prefix_mask[i] > 0.5]
         ctx = np.zeros((256, 2), dtype=np.int16)
         if len(pre):
             pre = np.rint(pre[-256:]).astype(np.int16)
             ctx[-len(pre):] = pre
         dur = int(min(max(durations[i], 32), hmax))
+        # velocity already in progress at B (offline eval only -- the runtime
+        # loop never differentiates coordinates)
+        v0 = prefix_dxdy[i][prefix_mask[i] > 0.5][-16:].mean(axis=0) if len(pre) else None
         for label, gain in (("B1", 0.0), ("B2'", args.gain)):
             lib = None if gain == 0.0 else library
-            reach = generate_reach(model, ctx, (tx[i], ty[i]), dur, library=lib, gain=gain)
+            # an independent renderer/noise seed per row, as in real use
+            reach = generate_reach(model, ctx, (tx[i], ty[i]), dur, library=lib, gain=gain,
+                                   event_seed=args.seed * 100000 + i, initial_velocity=v0)
             buf = np.zeros((hmax, 2)); m = np.zeros(hmax)
             k = min(len(reach), hmax)
             buf[:k] = reach[:k]; m[:k] = 1.0
             gens[label].append(buf); gmask[label].append(m)
 
+    print(file=sys.stderr)
     # Texture19 descriptors
     H = texture_features(human_dxdy, human_mask)
     G = {k: texture_features(np.asarray(v), np.asarray(gmask[k])) for k, v in gens.items()}

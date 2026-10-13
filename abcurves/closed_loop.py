@@ -48,6 +48,15 @@ class ClosedLoopConfig:
     commit_ms: int = 12
     """How much of each plan is committed before the next replan (receding)."""
     min_horizon_ms: int = 60
+    horizon_fitts_b: float = 0.0
+    """Time-to-go horizon (Hoff & Arbib): when > 0, each replan uses
+    ``tau = horizon_fitts_a + horizon_fitts_b * log2(1 + r / horizon_fitts_w)``
+    (Fitts-law remaining movement time from the current error ``r``) instead of
+    the constant ``horizon_ms``.  The horizon shrinks as the error shrinks, so a
+    reach arrives in finite time instead of crawling in on an exponential tail;
+    it is stateless, so a moving or jumping target needs no special handling."""
+    horizon_fitts_a: float = 100.0
+    horizon_fitts_w: float = 16.0
     r_inner: float = 2.0
     """Inner deadzone radius: inside it the error is damped toward zero."""
     deadzone_lambda: float = 1.0
@@ -82,6 +91,16 @@ class ClosedLoopConfig:
     forcing_pursuit_floor: float = 0.2
     """Minimum fraction of forcing kept in the small-error regime (never zero, so
     motion keeps some human character even when settling)."""
+    motor_noise_rel: float = 0.25
+    """Signal-dependent motor noise (Harris & Wolpert): multiplicative noise on
+    the commanded macro speed *along* the movement direction (std = this fraction
+    of the speed).  Zero at rest -> no idle jitter; direction-preserving -> no
+    per-axis sign flicker; zero-mean drift is absorbed by the next replan."""
+    motor_noise_perp: float = 0.0
+    """Perpendicular motor-noise std as a fraction of the speed (small: humans
+    are noisier along the movement than across it)."""
+    motor_noise_tau_ms: float = 0.0
+    """Correlation time of the motor noise (first-order, OU); 0 -> white."""
     event_seed: int = 7
     prodmp: ProDMPConfig = field(default_factory=ProDMPConfig)
 
@@ -142,11 +161,14 @@ class ClosedLoopProDMPController:
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
-    def reset(self, *, event_seed: Optional[int] = None) -> None:
+    def reset(self, *, event_seed: Optional[int] = None, initial_velocity=None) -> None:
         """Begin a fresh renderer stream and clear all plan state.
 
         Primes a few ms of resting micro-tremor so that the first movement does
         not start from a mathematically hard standstill (``v = 0``).
+        ``initial_velocity`` (counts/ms) hands off a movement already in progress:
+        it becomes the first plan's boundary velocity, so taking over an in-flight
+        cursor is :math:`C^1` instead of an abrupt stop-and-restart.
         """
         seed = self.config.event_seed if event_seed is None else int(event_seed)
         self._stream = self._context.begin_stream(event_seed=int(seed))
@@ -154,7 +176,12 @@ class ClosedLoopProDMPController:
         self._plan = None
         self._time_since_plan = 0
         self._shape = None
-        self.last_analytical_vel = np.zeros(2)
+        self._noise_state = np.zeros(2)
+        self.last_analytical_vel = (
+            np.zeros(2)
+            if initial_velocity is None
+            else np.asarray(initial_velocity, dtype=np.float64).reshape(2).copy()
+        )
         self._prime_rest_noise()
 
     def _prime_rest_noise(self) -> None:
@@ -191,6 +218,15 @@ class ClosedLoopProDMPController:
         z = cfg.deadzone_lambda * (r - cfg.r_inner - cfg.deadzone_eps)
         # clip keeps exp finite for large |z|
         return float(1.0 / (1.0 + np.exp(-np.clip(z, -60.0, 60.0))))
+
+    def _horizon(self, r: float) -> float:
+        """Homing horizon ``tau`` (ms): constant, or Fitts time-to-go of ``r``."""
+        cfg = self.config
+        if cfg.horizon_fitts_b <= 0.0:
+            return float(cfg.horizon_ms)
+        return cfg.horizon_fitts_a + cfg.horizon_fitts_b * float(
+            np.log2(1.0 + r / max(cfg.horizon_fitts_w, 1e-6))
+        )
 
     def _effective_gain(self, ydot_b: np.ndarray, goal: np.ndarray, tau: int) -> float:
         """Adaptive, safety-ceilinged forcing gain for this update."""
@@ -250,7 +286,7 @@ class ClosedLoopProDMPController:
             goal *= self._deadzone_scale(r)
 
         # (3) Macro-plan: ProDMP homing to goal over a receding horizon.
-        tau = int(max(cfg.min_horizon_ms, cfg.horizon_ms))
+        tau = int(max(cfg.min_horizon_ms, self._horizon(r)))
         w_eff = np.zeros((self.prodmp.n_weights, 2), dtype=np.float64)
         w_eff[:-1] = self._forcing_rows(goal, ydot_b, tau)  # macro curvature (B2') or 0 (B1)
         w_eff[-1] = goal  # goal row -> homes to target (goal_mode='target' equivalent)
@@ -265,6 +301,26 @@ class ClosedLoopProDMPController:
         self._time_since_plan = 0
         self.last_analytical_vel = ydot_b
         return commit
+
+    def _add_motor_noise(self, delta: tuple[float, float]) -> tuple[float, float]:
+        """Signal-dependent motor noise on one committed macro delta."""
+        cfg = self.config
+        if cfg.motor_noise_rel <= 0.0 and cfg.motor_noise_perp <= 0.0:
+            return delta
+        white = self._rng.standard_normal(2)
+        if cfg.motor_noise_tau_ms > 0.0:
+            # unit-variance OU: n <- a n + sqrt(1 - a^2) w
+            a = float(np.exp(-1.0 / cfg.motor_noise_tau_ms))
+            self._noise_state = a * self._noise_state + np.sqrt(1.0 - a * a) * white
+        else:
+            self._noise_state = white
+        n_par, n_perp = self._noise_state
+        dx, dy = delta
+        # (dx, dy) * (1 + rel n_par)  +  (-dy, dx) * perp n_perp
+        return (
+            dx * (1.0 + cfg.motor_noise_rel * n_par) - dy * cfg.motor_noise_perp * n_perp,
+            dy * (1.0 + cfg.motor_noise_rel * n_par) + dx * cfg.motor_noise_perp * n_perp,
+        )
 
     # ------------------------------------------------------------------
     # High-frequency generation (1 kHz)
@@ -283,6 +339,7 @@ class ClosedLoopProDMPController:
         if self._buffer:
             dx, dy = self._buffer.popleft()
             delta = (float(dx), float(dy))
+            delta = self._add_motor_noise(delta)
         else:
             delta = (0.0, 0.0)
         report = self._stream.step(delta)

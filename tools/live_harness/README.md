@@ -32,7 +32,13 @@ the controller + harness also run on 3.9 (they avoid `hashlib.file_digest`).
   the trail stays on screen. Resume continues from where it stopped.
 - **curvature (B2′) slider** — live `forcing_gain`. `0` = pure minimum-jerk
   homing (B1); `~0.45` = baked human-like macro curvature. Disabled with no lib.
-- **deadzone toggle**, **scale slider**, **reset**.
+- **deadzone toggle**, **reset**.
+- **zoom into any region** — mouse **wheel** zooms at the pointer; **Shift+drag** draws a
+  box and zooms into it; **right-drag** pans (left-drag also pans in auto modes or while
+  paused); **double-click** or **fit** resets the view. Zoom goes up to 400x; the grid
+  adapts (its spacing in counts is shown in the footer) and once single counts are
+  resolvable every 1 ms report is drawn as a dot. **follow** keeps the generated cursor
+  centred (auto modes / paused).
 
 ## What you see
 

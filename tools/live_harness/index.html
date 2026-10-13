@@ -24,6 +24,7 @@
   .stat b { color:var(--ink); font-weight:600; }
   .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; }
   canvas { flex:1; display:block; width:100%; touch-action:none; cursor:crosshair; }
+  canvas.panning { cursor:grabbing; }
   footer { padding:6px 14px; color:var(--muted); background:var(--panel); border-top:1px solid #222;
            font-size:12px; }
 </style>
@@ -55,8 +56,9 @@
         <option value="0.04">0.04× ultra</option>
       </select>
     </label>
-    <label>zoom <input type="range" id="zoom" min="0.25" max="6" step="0.05" value="1"><span id="zoomv" class="stat">1.0×</span></label>
-    <button id="fit">fit</button>
+    <label>zoom <input type="range" id="zoom" min="-2" max="8.64" step="0.01" value="0"><span id="zoomv" class="stat">1.0×</span></label>
+    <label title="keep the generated cursor centred (pan follows it)"><input type="checkbox" id="follow"> follow</label>
+    <button id="fit" title="reset zoom and pan">fit</button>
     <button id="pause">⏸ pause</button>
     <button id="reset">reset</button>
   </header>
@@ -66,7 +68,8 @@
       <span class="stat">err <b id="err">0.0</b></span> ·
       <span class="stat">pending <b id="pending">0</b></span> ·
       <span class="stat">ticks <b id="ticks">0</b></span> ·
-      renderer <b id="rmode">?</b>
+      renderer <b id="rmode">?</b> ·
+      <span class="stat">grid <b id="gridv">50</b> counts</span>
     </div>
     <div id="score" style="margin-top:4px">
       <span class="stat">objective score (last 8 s):</span>
@@ -78,7 +81,10 @@
     </div>
     <div style="margin-top:4px; color:var(--muted)">
       manual = move the mouse · auto = the program drives the target so the run is
-      reproducible. β≈0.33 &amp; high R² = human curvature; LDLJ/SPARC nearer 0 = smoother.
+      reproducible. β≈0.33 &amp; high R² = human curvature; LDLJ/SPARC nearer 0 = smoother.<br>
+      zoom: <b>wheel</b> = zoom at pointer · <b>Shift+drag</b> = zoom into a box ·
+      <b>right-drag</b> (or left-drag in auto / paused) = pan · <b>double-click</b> / fit = reset.
+      Zoomed in, each dot is one 1&nbsp;ms report.
     </div>
   </footer>
 </div>
@@ -89,6 +95,7 @@ const ui = { err:$('err'), pending:$('pending'), ticks:$('ticks'), rmode:$('rmod
              modeSel:$('mode'), deadzone:$('deadzone'),
              gain:$('gain'), gainv:$('gainv'),
              zoom:$('zoom'), zoomv:$('zoomv'), speed:$('speed'), fit:$('fit'),
+             follow:$('follow'), gridv:$('gridv'),
              m_rms:$('m_rms'), m_beta:$('m_beta'), m_r2:$('m_r2'),
              m_ldlj:$('m_ldlj'), m_sparc:$('m_sparc'), m_tremor:$('m_tremor') };
 ui.gain.addEventListener('input', ()=>{ ui.gainv.textContent = parseFloat(ui.gain.value).toFixed(2); });
@@ -106,13 +113,28 @@ pauseBtn.addEventListener('click', ()=>{
 let W=0,H=0,DPR=1, cx=0, cy=0;
 const FIT_COUNTS = 230;             // scenario half-extent we size the view to
 let baseScale = 1, zoom = 1, scale = 1;
+const ZOOM_MIN = 0.25, ZOOM_MAX = 400;
+let pan = [0,0];                    // world point (counts) at the canvas centre
+let drag = null;                    // {kind:'pan'|'box', x0,y0, x,y, pan0}
 let speed = 1;                      // slow-mo factor (sim-ms per real-ms)
 let mousePx = null;                 // latest pointer position (css px)
 let cursorCount = [0,0];            // server-owned generated position (counts)
 let trail = [];                     // absolute cursor positions (counts)
 const TRAIL_MAX = 1400;
 
-function applyScale(){ scale = baseScale * zoom; ui.zoomv.textContent = zoom.toFixed(2)+'×'; }
+function applyScale(){
+  scale = baseScale * zoom;
+  ui.zoomv.textContent = (zoom < 10 ? zoom.toFixed(2) : zoom.toFixed(0)) + '×';
+  ui.zoom.value = Math.log2(zoom);
+}
+function setZoom(z){ zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)); applyScale(); }
+// zoom keeping the world point under screen pixel (px,py) fixed
+function zoomAt(px, py, z){
+  const before = toCount({x:px, y:py});
+  setZoom(z);
+  const after = toCount({x:px, y:py});
+  pan = [pan[0] + before[0] - after[0], pan[1] + before[1] - after[1]];
+}
 function resize(){
   DPR = window.devicePixelRatio || 1;
   const r = cv.getBoundingClientRect();
@@ -124,25 +146,63 @@ function resize(){
 }
 window.addEventListener('resize', resize);
 
-function toCount(px){ return [ (px.x-cx)/scale, -(px.y-cy)/scale ]; }  // y-up
-function toPx(c){ return [ cx + c[0]*scale, cy - c[1]*scale ]; }
+function toCount(px){ return [ pan[0] + (px.x-cx)/scale, pan[1] - (px.y-cy)/scale ]; }  // y-up
+function toPx(c){ return [ cx + (c[0]-pan[0])*scale, cy - (c[1]-pan[1])*scale ]; }
 
-cv.addEventListener('pointermove', e=>{
-  const r = cv.getBoundingClientRect();
-  mousePx = { x:e.clientX-r.left, y:e.clientY-r.top };
-});
+function localPx(e){ const r = cv.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; }
+cv.addEventListener('contextmenu', e=> e.preventDefault());   // right-drag pans
 cv.addEventListener('pointerdown', e=>{
-  const r = cv.getBoundingClientRect();
-  mousePx = { x:e.clientX-r.left, y:e.clientY-r.top };
-});
-cv.addEventListener('wheel', e=>{                       // mouse-wheel zoom
+  const p = localPx(e);
+  const leftPans = paused || ui.modeSel.value !== 'manual';
+  if(e.button === 0 && e.shiftKey){
+    drag = { kind:'box', x0:p.x, y0:p.y, x:p.x, y:p.y };
+  } else if(e.button === 2 || e.button === 1 || (e.button === 0 && leftPans)){
+    drag = { kind:'pan', x0:p.x, y0:p.y, x:p.x, y:p.y, pan0:pan.slice() };
+    ui.follow.checked = false;
+    cv.classList.add('panning');
+  } else {
+    mousePx = p;
+    return;
+  }
   e.preventDefault();
-  zoom = Math.min(6, Math.max(0.25, zoom * (e.deltaY < 0 ? 1.1 : 1/1.1)));
-  ui.zoom.value = zoom; applyScale();
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e=>{
+  const p = localPx(e);
+  if(!drag){ mousePx = p; return; }     // dragging never moves the manual target
+  drag.x = p.x; drag.y = p.y;
+  if(drag.kind === 'pan'){
+    pan = [ drag.pan0[0] - (p.x-drag.x0)/scale, drag.pan0[1] + (p.y-drag.y0)/scale ];
+  }
+});
+function endDrag(){
+  if(!drag) return;
+  if(drag.kind === 'box'){
+    const w = Math.abs(drag.x-drag.x0), h = Math.abs(drag.y-drag.y0);
+    if(w > 6 && h > 6){
+      const mid = toCount({ x:(drag.x+drag.x0)/2, y:(drag.y+drag.y0)/2 });
+      ui.follow.checked = false;
+      setZoom(zoom * Math.min(W/w, H/h));
+      pan = mid;
+    }
+  }
+  drag = null;
+  cv.classList.remove('panning');
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+cv.addEventListener('wheel', e=>{                       // zoom at the pointer
+  e.preventDefault();
+  const p = localPx(e);
+  const z = zoom * Math.pow(1.0015, -e.deltaY);
+  if(ui.follow.checked){ setZoom(z); return; }
+  zoomAt(p.x, p.y, z);
 }, {passive:false});
-ui.zoom.addEventListener('input', ()=>{ zoom = parseFloat(ui.zoom.value); applyScale(); });
+cv.addEventListener('dblclick', ()=> fitView());
+ui.zoom.addEventListener('input', ()=>{ zoomAt(cx, cy, Math.pow(2, parseFloat(ui.zoom.value))); });
 ui.speed.addEventListener('change', ()=>{ speed = parseFloat(ui.speed.value); });
-ui.fit.addEventListener('click', ()=>{ zoom = 1; ui.zoom.value = 1; applyScale(); });
+function fitView(){ pan = [0,0]; ui.follow.checked = false; setZoom(1); }
+ui.fit.addEventListener('click', fitView);
 document.getElementById('reset').addEventListener('click', doReset);
 
 async function doReset(){
@@ -200,18 +260,31 @@ async function pollScore(){
 }
 setInterval(pollScore, 1200);
 
+// grid spacing in counts: a 1-2-5 step that stays >= ~40 px on screen
+function gridStep(){
+  const want = 40 / scale;
+  const mag = Math.pow(10, Math.floor(Math.log10(want)));
+  for(const m of [1,2,5,10]){ if(m*mag >= want) return Math.max(1, m*mag); }
+  return Math.max(1, 10*mag);
+}
 function draw(){
+  // (not in live manual mode: the target is the pointer in world space, so a
+  //  camera that chases the cursor would drag the target away with it)
+  if(ui.follow.checked && (paused || ui.modeSel.value !== 'manual')) pan = cursorCount.slice();
   ctx.clearRect(0,0,W,H);
-  // grid
+  // grid (world-anchored, adapts to the zoom level)
+  const g = gridStep();
+  ui.gridv.textContent = g;
   ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth=1;
-  const step = 50*scale;
+  const tl = toCount({x:0,y:0}), br = toCount({x:W,y:H});
   ctx.beginPath();
-  for(let x=cx% step; x<W; x+=step){ ctx.moveTo(x,0); ctx.lineTo(x,H); }
-  for(let y=cy% step; y<H; y+=step){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
+  for(let gx=Math.ceil(tl[0]/g)*g; gx<=br[0]; gx+=g){ const x=toPx([gx,0])[0]; ctx.moveTo(x,0); ctx.lineTo(x,H); }
+  for(let gy=Math.ceil(br[1]/g)*g; gy<=tl[1]; gy+=g){ const y=toPx([0,gy])[1]; ctx.moveTo(0,y); ctx.lineTo(W,y); }
   ctx.stroke();
   // origin crosshair
+  const o = toPx([0,0]);
   ctx.strokeStyle='#30363d'; ctx.beginPath();
-  ctx.moveTo(cx-8,cy); ctx.lineTo(cx+8,cy); ctx.moveTo(cx,cy-8); ctx.lineTo(cx,cy+8); ctx.stroke();
+  ctx.moveTo(o[0]-8,o[1]); ctx.lineTo(o[0]+8,o[1]); ctx.moveTo(o[0],o[1]-8); ctx.lineTo(o[0],o[1]+8); ctx.stroke();
 
   // trail (fading)
   if(trail.length>1){
@@ -221,6 +294,16 @@ function draw(){
       const alpha = i/trail.length;
       ctx.strokeStyle = `rgba(47,129,247,${(0.05+0.75*alpha).toFixed(3)})`;
       ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke();
+    }
+    // zoomed in far enough to resolve single counts: mark every 1 ms report
+    if(scale >= 6){
+      const r = Math.min(3, scale/6);
+      for(let i=0;i<trail.length;i++){
+        const a = toPx(trail[i]);
+        if(a[0] < -5 || a[0] > W+5 || a[1] < -5 || a[1] > H+5) continue;
+        ctx.fillStyle = `rgba(230,237,243,${(0.15+0.7*i/trail.length).toFixed(3)})`;
+        ctx.beginPath(); ctx.arc(a[0],a[1],r,0,7); ctx.fill();
+      }
     }
   }
   // target (mouse in manual mode, scripted in auto modes)
@@ -235,6 +318,13 @@ function draw(){
   const c=toPx(cursorCount);
   ctx.fillStyle=getCSS('--cursor');
   ctx.beginPath(); ctx.arc(c[0],c[1],5,0,7); ctx.fill();
+  // box-zoom selection
+  if(drag && drag.kind === 'box'){
+    ctx.strokeStyle = getCSS('--ok'); ctx.lineWidth = 1; ctx.setLineDash([5,4]);
+    ctx.strokeRect(Math.min(drag.x0,drag.x), Math.min(drag.y0,drag.y),
+                   Math.abs(drag.x-drag.x0), Math.abs(drag.y-drag.y0));
+    ctx.setLineDash([]);
+  }
 }
 
 function getCSS(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
